@@ -31,6 +31,8 @@ MIN_FREQUENCY = 115000.0
 MAX_VOLTAGE = 617.0
 MIN_VOLTAGE = -MAX_VOLTAGE
 
+IMAGE_EXT = '.svg' if sys.version_info > (3, 4,) else '.png'
+
 
 class App(QMainWindow):
     def __init__(self):
@@ -100,6 +102,8 @@ class App(QMainWindow):
         # Frequency Mark box
         self.group_mark = QGroupBox(self.central_widget)
         self.grid_layout_mark = QGridLayout(self.group_mark)
+        self.grid_layout_mark.setColumnStretch(0, 1)
+        self.grid_layout_mark.setColumnStretch(1, 1)
 
         self.label_mark_min = QLabel(self.group_mark)
         self.label_mark_max = QLabel(self.group_mark)
@@ -112,6 +116,12 @@ class App(QMainWindow):
         self.spin_mark_max.setMaximum(MAX_FREQUENCY)
         self.spin_mark_min.setValue(MIN_FREQUENCY)
         self.spin_mark_max.setValue(MAX_FREQUENCY)
+        self.button_mark_min_reset = QPushButton(self.group_mark)
+        self.button_mark_max_reset = QPushButton(self.group_mark)
+        for b in (self.button_mark_min_reset, self.button_mark_max_reset):
+            icon = QIcon()
+            icon.addPixmap(QPixmap(os.path.join('img', 'reset' + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
+            b.setIcon(icon)
         self.button_zoom_to_selection = QPushButton(self.group_mark)
 
         # plot
@@ -121,12 +131,16 @@ class App(QMainWindow):
         self.plot_toolbar = NavigationToolbar(self.canvas, self)
         self.plot_mark_action = QAction(self.plot_toolbar)
         self.plot_trace_action = QAction(self.plot_toolbar)
+        self.plot_trace_multiple_action = QAction(self.plot_toolbar)
         self.plot_widget = self.figure.add_subplot(1, 1, 1)
         self.plot = backend.Plot(figure=self.plot_widget,
                                  canvas=self.canvas)
         self.plot_trace_cursor = mplcursors.cursor(self.plot.lines,
                                                    bindings={'left': 'left', 'right': 'right'})
         self.plot_trace_cursor.enabled = False
+        self.plot_trace_multiple_cursor = mplcursors.cursor(self.plot.lines, multiple=True,
+                                                            bindings={'left': 'left', 'right': 'right'})
+        self.plot_trace_multiple_cursor.enabled = False
 
         self.setup_ui(self)
 
@@ -137,11 +151,12 @@ class App(QMainWindow):
         self.load_config()
 
         # plot toolbar
+        # TODO: add keyboard shortcuts
         new_toolitems = (
-            ('Open', 'Open Data', 'open.png', self.load_data),
-            ('Save Data', 'Save the data as text', 'savetable.png',
-             lambda: self.plot.save_data(*self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)"))),
-            ('Clear', 'Clear', 'delete.png', self.plot.clear),
+            ('Open', 'Open Data', 'open', self.load_data),
+            ('Save Data', 'Save the data as text', 'savetable',
+             lambda: self.plot.save_data(*self.save_file_dialog(filter="CSV (*.csv);;XLSX (*.xlsx)"))),
+            ('Clear', 'Clear', 'delete', self.plot.clear),
         )
         for text, tooltip_text, icon_name, callback in new_toolitems:
             if text is None:
@@ -154,16 +169,17 @@ class App(QMainWindow):
                     a.setToolTip(tooltip_text)
                 if icon_name is not None:
                     icon = QIcon()
-                    icon.addPixmap(QPixmap(os.path.join('img', icon_name)), QIcon.Normal, QIcon.Off)
+                    icon.addPixmap(QPixmap(os.path.join('img', icon_name + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
                     a.setIcon(icon)
                 self.plot_toolbar.addAction(a)
-        for a, i in zip([self.plot_mark_action, self.plot_trace_action],
-                        ['measureline.png', 'selectobject.png']):
+        for a, i in zip([self.plot_mark_action, self.plot_trace_action, self.plot_trace_multiple_action],
+                        ['measureline', 'selectobject', 'selectmultiple']):
             icon = QIcon()
-            icon.addPixmap(QPixmap(os.path.join('img', i)), QIcon.Normal, QIcon.Off)
+            icon.addPixmap(QPixmap(os.path.join('img', i + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
             a.setIcon(icon)
         self.plot_toolbar.addAction(self.plot_mark_action)
         self.plot_toolbar.addAction(self.plot_trace_action)
+        self.plot_toolbar.addAction(self.plot_trace_multiple_action)
 
         # actions
         self.spin_frequency_min.valueChanged.connect(self.spin_frequency_min_changed)
@@ -186,20 +202,26 @@ class App(QMainWindow):
         self.button_zoom_y_in_coarse.clicked.connect(lambda: self.button_zoom_y_clicked(0.5))
         self.spin_mark_min.valueChanged.connect(self.spin_mark_min_changed)
         self.spin_mark_max.valueChanged.connect(self.spin_mark_max_changed)
+        self.button_mark_min_reset.clicked.connect(self.button_mark_min_reset_clicked)
+        self.button_mark_max_reset.clicked.connect(self.button_mark_max_reset_clicked)
         self.button_zoom_to_selection.clicked.connect(self.button_zoom_to_selection_clicked)
 
         self.plot_mark_action.toggled.connect(self.plot_mark_action_toggled)
         self.plot_trace_action.toggled.connect(self.plot_trace_action_toggled)
+        self.plot_trace_multiple_action.toggled.connect(self.plot_trace_multiple_action_toggled)
 
         # dirty hack: the event doesn't work directly for subplots
         self.mpl_connect_cid = self.canvas.mpl_connect('button_press_event', self.plot_on_click)
 
     def setup_ui(self, main_window):
         main_window.resize(484, 441)
-        main_window.setWindowIcon(QIcon(os.path.abspath(os.path.join('img', 'sweep.png'))))
+        icon = QIcon()
+        icon.addPixmap(QPixmap(os.path.join('img', 'sweep' + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
+        main_window.setWindowIcon(icon)
 
         self.plot_mark_action.setCheckable(True)
         self.plot_trace_action.setCheckable(True)
+        self.plot_trace_multiple_action.setCheckable(True)
 
         self.grid_layout_frequency.addWidget(self.label_frequency_min, 1, 0, 1, 2)
         self.grid_layout_frequency.addWidget(self.label_frequency_max, 0, 0, 1, 2)
@@ -236,7 +258,9 @@ class App(QMainWindow):
         self.grid_layout_mark.addWidget(self.label_mark_max, 0, 0)
         self.grid_layout_mark.addWidget(self.spin_mark_min, 1, 1)
         self.grid_layout_mark.addWidget(self.spin_mark_max, 0, 1)
-        self.grid_layout_mark.addWidget(self.button_zoom_to_selection, 2, 0, 1, 2)
+        self.grid_layout_mark.addWidget(self.button_mark_min_reset, 1, 2)
+        self.grid_layout_mark.addWidget(self.button_mark_max_reset, 0, 2)
+        self.grid_layout_mark.addWidget(self.button_zoom_to_selection, 2, 0, 1, 3)
 
         _value_label_interaction_flags = (Qt.LinksAccessibleByKeyboard
                                           | Qt.LinksAccessibleByMouse
@@ -294,6 +318,10 @@ class App(QMainWindow):
         self.group_mark.setTitle(_translate("main_window", "Mark"))
         self.label_mark_min.setText(_translate("main_window", "Minimum") + ':')
         self.label_mark_max.setText(_translate("main_window", "Maximum") + ':')
+        if self.button_mark_min_reset.icon().isNull():
+            self.button_mark_min_reset.setText(_translate("main_window", "Reset"))
+        if self.button_mark_max_reset.icon().isNull():
+            self.button_mark_max_reset.setText(_translate("main_window", "Reset"))
         self.button_zoom_to_selection.setText(_translate("main_window", "Zoom to Selection"))
 
         self.spin_frequency_min.setSuffix(suffix_mhz)
@@ -307,8 +335,12 @@ class App(QMainWindow):
 
         self.plot_mark_action.setIconText(_translate("main_window", "Mark"))
         self.plot_trace_action.setIconText(_translate("main_window", "Trace"))
+        self.plot_trace_multiple_action.setIconText(_translate("main_window", "Trace Multiple"))
 
         self.plot_trace_cursor.connect("add", lambda sel: sel.annotation.set_text(
+            ('{:.3f}' + suffix_mhz + '\n{:.3f}' + suffix_mv).format(*sel.annotation.xy)
+        ))
+        self.plot_trace_multiple_cursor.connect("add", lambda sel: sel.annotation.set_text(
             ('{:.3f}' + suffix_mhz + '\n{:.3f}' + suffix_mv).format(*sel.annotation.xy)
         ))
 
@@ -398,7 +430,7 @@ class App(QMainWindow):
     def load_data(self):
         if self._loading:
             return
-        lims = self.plot.load_data(*self.open_file_dialog(_filter="Spectrometer Settings (*.fmd);;All Files (*)"))
+        lims = self.plot.load_data(*self.open_file_dialog(filter="Spectrometer Settings (*.fmd);;All Files (*)"))
         if lims is not None:
             min_freq, max_freq, min_voltage, max_voltage = lims
             self.set_config_value('frequency', 'lower', min_freq)
@@ -424,6 +456,8 @@ class App(QMainWindow):
             else:
                 self.spin_voltage_min.setMaximum(max(max_voltage, self.spin_voltage_min.value()))
                 self.spin_voltage_max.setMinimum(min(min_voltage, self.spin_voltage_max.value()))
+            self.spin_mark_max.setMinimum(max(max_freq, self.spin_mark_max.minimum()))
+            self.spin_mark_max.setMinimum(max(max_freq, self.spin_mark_max.minimum()))
             self._loading = False
             self.plot.set_frequency_range(lower_value=self.spin_frequency_min.value(),
                                           upper_value=self.spin_frequency_max.value())
@@ -574,21 +608,29 @@ class App(QMainWindow):
         self.plot.set_mark(lower_value=self.spin_mark_min.value(), upper_value=new_value)
         self._loading = False
 
+    def button_mark_min_reset_clicked(self):
+        self.spin_mark_min.setValue(self.spin_mark_min.minimum())
+
+    def button_mark_max_reset_clicked(self):
+        self.spin_mark_max.setValue(self.spin_mark_max.maximum())
+
     def button_zoom_to_selection_clicked(self):
         self.spin_frequency_min.setValue(self.spin_mark_min.value())
         self.spin_frequency_max.setValue(self.spin_mark_max.value())
 
-    def plot_mark_action_toggled(self, new_value: bool):
+    def plot_mark_action_toggled(self, new_value):
         if self.plot_toolbar.mode == 'zoom rect':
             self.plot_toolbar.zoom()
         elif self.plot_toolbar.mode == 'pan/zoom':
             self.plot_toolbar.pan()
         if new_value:
             self.plot_trace_action.setChecked(False)
+            self.plot_trace_multiple_action.setChecked(False)
 
-    def plot_trace_action_toggled(self, new_value: bool):
+    def plot_trace_action_toggled(self, new_value):
         if new_value:
             self.plot_mark_action.setChecked(False)
+            self.plot_trace_multiple_action.setChecked(False)
             self.canvas.setFocus()
         if self.plot_toolbar.mode == 'zoom rect':
             self.plot_toolbar.zoom()
@@ -596,12 +638,47 @@ class App(QMainWindow):
             self.plot_toolbar.pan()
         self.plot_trace_cursor.enabled = new_value
         self.plot_trace_cursor.visible = new_value
+        self.plot_trace_multiple_cursor.enabled = False
+        self.plot_trace_multiple_cursor.visible = False
+
+    def plot_trace_multiple_action_toggled(self, new_value):
+        if new_value:
+            self.plot_mark_action.setChecked(False)
+            self.plot_trace_action.setChecked(False)
+            self.canvas.setFocus()
+        else:
+            picked_x = []
+            picked_y = []
+            for sel in self.plot_trace_multiple_cursor.selections:
+                x, y = sel.annotation.xy
+                print(dir(sel.annotation))
+                picked_x.append(x)
+                picked_y.append(y)
+            filename, _filter = self.save_file_dialog(filter="CSV (*.csv);;XLSX (*.xlsx)")
+            if filename:
+                sep = '\t'
+                self.plot.save_arbitrary_data(picked_x, picked_y, filename, _filter,
+                                              csv_header=(sep.join(('frequency', 'voltage')) + '\n'
+                                                          + sep.join(('MHz', 'mV'))),
+                                              csv_sep=sep,
+                                              xlsx_header=['Frequency [MHz]', 'Voltage [mV]'])
+        if self.plot_toolbar.mode == 'zoom rect':
+            self.plot_toolbar.zoom()
+        elif self.plot_toolbar.mode == 'pan/zoom':
+            self.plot_toolbar.pan()
+        self.plot_trace_cursor.enabled = False
+        self.plot_trace_cursor.visible = False
+        self.plot_trace_multiple_cursor.enabled = new_value
+        self.plot_trace_multiple_cursor.visible = new_value
 
     def plot_on_click(self, event):
         if self._loading:
             return
         if event.inaxes is not None:
-            if event.dblclick and not self.plot_mark_action.isChecked() and not self.plot_trace_action.isChecked():
+            if event.dblclick \
+                    and not self.plot_mark_action.isChecked() \
+                    and not self.plot_trace_action.isChecked() \
+                    and not self.plot_trace_multiple_action.isChecked():
                 min_freq, max_freq, min_voltage, max_voltage = self.plot.on_dblclick(event)
                 self.set_config_value('frequency', 'lower', min_freq)
                 self.set_config_value('frequency', 'upper', max_freq)

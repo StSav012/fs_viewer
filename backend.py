@@ -44,11 +44,11 @@ class Plot:
         self._figure.set_ylabel('Voltage [mV]')
         self._figure.format_coord = lambda x, y: '{:.3f} V\n{:.3f} MHz'.format(x, y)
 
-        self._plot_lines = [self._figure.plot(np.empty(0), label='not marked {}'.format(i + 1))[0]
+        self._plot_lines = [self._figure.plot(np.empty(0), label='_*empty*_ {} (not marked)'.format(i + 1))[0]
                             for i in range(LINES_COUNT)]
-        self._plot_mark_lines = [self._figure.plot(np.empty(0), label='marked {}'.format(i + 1))[0]
+        self._plot_mark_lines = [self._figure.plot(np.empty(0), label='_*empty*_ {} (marked)'.format(i + 1))[0]
                                  for i in range(LINES_COUNT)]
-        self._plot_lines_labels = [''] * LINES_COUNT
+        self._plot_lines_labels = ['_*empty*_'] * LINES_COUNT
         self._plot_frequencies = [np.empty(0)] * LINES_COUNT
         self._plot_voltages = [np.empty(0)] * LINES_COUNT
 
@@ -62,7 +62,7 @@ class Plot:
         self._figure.callbacks.connect('xlim_changed', self.on_xlim_changed)
         # self._figure.callbacks.connect('ylim_changed', self.on_ylim_changed)
         self._axvlines = [self._figure.axvline(np.nan, color='grey', linewidth=0.5,
-                                               label='vertical line {}'.format(i + 1))
+                                               label='_ vertical line {}'.format(i + 1))
                           for i in range(GRID_LINES_COUNT)]
 
     def make_grid(self, xlim):
@@ -180,7 +180,7 @@ class Plot:
             line.set_data(np.empty(0), np.empty(0))
         for line in self._plot_mark_lines:
             line.set_data(np.empty(0), np.empty(0))
-        self._plot_lines_labels = [''] * LINES_COUNT
+        self._plot_lines_labels = ['_*empty*_'] * LINES_COUNT
         self._canvas.draw_idle()
 
     def load_data(self, filename, _filter):
@@ -252,7 +252,7 @@ class Plot:
                 filename += '.xlsx'
             with pd.ExcelWriter(filename) as writer:
                 for i, (x, y) in enumerate(zip(self._plot_frequencies, self._plot_voltages)):
-                    if not self._plot_lines_labels[i]:
+                    if self._plot_lines_labels[i].startswith('_*empty*_'):
                         continue
                     if self._max_mark is not None:
                         good = (x <= self._max_mark)
@@ -268,3 +268,27 @@ class Plot:
                     df = pd.DataFrame(data)
                     df.to_excel(writer, index=False, header=['Frequency [MHz]', 'Voltage [mV]'],
                                 sheet_name=self._plot_lines_labels[i])
+
+    @staticmethod
+    def save_arbitrary_data(x, y, filename, _filter, *,
+                            csv_header='', csv_sep='\t',
+                            xlsx_header=True, sheet_name='Markings'):
+        if not filename:
+            return
+        filename_parts = os.path.splitext(filename)
+        if 'CSV' in _filter:
+            if filename_parts[1] != '.csv':
+                filename += '.csv'
+            data = np.vstack((x, y)).transpose()
+            np.savetxt(filename, data,
+                       delimiter=csv_sep,
+                       header=csv_header,
+                       fmt='%s')
+        elif 'XLSX' in _filter:
+            if filename_parts[1] != '.xlsx':
+                filename += '.xlsx'
+            with pd.ExcelWriter(filename) as writer:
+                data = np.vstack((x, y)).transpose()
+                df = pd.DataFrame(data)
+                df.to_excel(writer, index=False, header=xlsx_header,
+                            sheet_name=sheet_name)
