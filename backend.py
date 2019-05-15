@@ -1,16 +1,15 @@
-# -*- coding: utf-8 -*-
-from typing import Union, Tuple, List, Any
+﻿# -*- coding: utf-8 -*-
 import os
 import numpy as np
 import pandas as pd
 from matplotlib.pyplot import Line2D
 
-FRAME_SIZE: float = 50.
-LINES_COUNT: int = 2
-GRID_LINES_COUNT: int = 32
+FRAME_SIZE = 50.
+LINES_COUNT = 2
+GRID_LINES_COUNT = 32
 
 
-def nonemin(x: Any):
+def nonemin(x):
     m = np.nan
     if np.iterable(x):
         for _ in x:
@@ -23,7 +22,7 @@ def nonemin(x: Any):
         return x
 
 
-def nonemax(x: Any):
+def nonemax(x):
     m = np.nan
     if np.iterable(x):
         for _ in x:
@@ -42,31 +41,31 @@ class Plot:
 
         self._figure = figure
         self._figure.set_xlabel('Frequency [MHz]')
-        self._figure.set_ylabel('Voltage [V]')
-        self._figure.format_coord = lambda x, y: f'{y:.3f} V\n{x:.3f} MHz'
+        self._figure.set_ylabel('Voltage [mV]')
+        self._figure.format_coord = lambda x, y: '{:.3f} V\n{:.3f} MHz'.format(x, y)
 
-        self._plot_lines: List[Line2D] = [self._figure.plot(np.empty(0), label=f'not marked {i + 1}')[0]
-                                          for i in range(LINES_COUNT)]
-        self._plot_mark_lines: List[Line2D] = [self._figure.plot(np.empty(0), label=f'marked {i + 1}')[0]
-                                               for i in range(LINES_COUNT)]
-        self._plot_lines_labels: List[str] = ['*empty*'] * LINES_COUNT
-        self._plot_frequencies: List[np.core.ndarray] = [np.empty(0)] * LINES_COUNT
-        self._plot_voltages: List[np.core.ndarray] = [np.empty(0)] * LINES_COUNT
+        self._plot_lines = [self._figure.plot(np.empty(0), label='not marked {}'.format(i + 1))[0]
+                            for i in range(LINES_COUNT)]
+        self._plot_mark_lines = [self._figure.plot(np.empty(0), label='marked {}'.format(i + 1))[0]
+                                 for i in range(LINES_COUNT)]
+        self._plot_lines_labels = [''] * LINES_COUNT
+        self._plot_frequencies = [np.empty(0)] * LINES_COUNT
+        self._plot_voltages = [np.empty(0)] * LINES_COUNT
 
-        self._min_frequency: Union[None, float] = None
-        self._max_frequency: Union[None, float] = None
-        self._min_voltage: Union[None, float] = None
-        self._max_voltage: Union[None, float] = None
-        self._min_mark: Union[None, float] = None
-        self._max_mark: Union[None, float] = None
+        self._min_frequency = None
+        self._max_frequency = None
+        self._min_voltage = None
+        self._max_voltage = None
+        self._min_mark = None
+        self._max_mark = None
 
         self._figure.callbacks.connect('xlim_changed', self.on_xlim_changed)
         # self._figure.callbacks.connect('ylim_changed', self.on_ylim_changed)
-        self._axvlines: List[Line2D] = [self._figure.axvline(np.nan, color='grey', linewidth=0.5,
-                                                             label=f'vertical line {i + 1}')
-                                        for i in range(GRID_LINES_COUNT)]
+        self._axvlines = [self._figure.axvline(np.nan, color='grey', linewidth=0.5,
+                                               label='vertical line {}'.format(i + 1))
+                          for i in range(GRID_LINES_COUNT)]
 
-    def make_grid(self, xlim: Tuple[Union[None, float], Union[None, float]]):
+    def make_grid(self, xlim):
         if any(map(lambda lim: lim is None, xlim)):
             return
         if np.ptp(xlim) // FRAME_SIZE <= len(self._axvlines):
@@ -127,21 +126,21 @@ class Plot:
         self._canvas.draw_idle()
         return self._min_frequency, self._max_frequency, self._min_voltage, self._max_voltage
 
-    def set_frequency_range(self, lower_value: Union[None, float] = None, upper_value: Union[None, float] = None):
+    def set_frequency_range(self, lower_value=None, upper_value=None):
         self._figure.set_xlim(left=lower_value, right=upper_value, emit=True)
         self._canvas.draw_idle()
 
-    def set_voltage_range(self, lower_value: Union[None, float] = None, upper_value: Union[None, float] = None):
+    def set_voltage_range(self, lower_value=None, upper_value=None):
         self._figure.set_ylim(bottom=lower_value, top=upper_value, emit=False)
         self._canvas.draw_idle()
 
-    def set_mark(self, lower_value: Union[None, float] = None, upper_value: Union[None, float] = None):
+    def set_mark(self, lower_value=None, upper_value=None):
         self._min_mark = lower_value
         self._max_mark = upper_value
         self.draw_data(self._plot_frequencies, self._plot_voltages, (lower_value, upper_value))
 
-    def draw_data(self, xs: List[np.ndarray], ys: List[np.ndarray],
-                  marks: Tuple[Union[None, float], Union[None, float]]):
+    def draw_data(self, xs, ys,
+                  marks):
         for i, (x, y) in enumerate(zip(xs, ys)):
             left_x = np.empty(0)
             left_y = np.empty(0)
@@ -181,7 +180,7 @@ class Plot:
             line.set_data(np.empty(0), np.empty(0))
         for line in self._plot_mark_lines:
             line.set_data(np.empty(0), np.empty(0))
-        self._plot_lines_labels = ['*empty*'] * LINES_COUNT
+        self._plot_lines_labels = [''] * LINES_COUNT
         self._canvas.draw_idle()
 
     def load_data(self, filename, _filter):
@@ -212,7 +211,7 @@ class Plot:
             i = 0
             while new_label in self._plot_lines_labels[1:]:
                 i += 1
-                new_label = f'{new_label_base} ({i})'
+                new_label = '{} ({})'.format(new_label_base, i)
             self._plot_lines_labels = self._plot_lines_labels[1:] + [new_label]
             self._min_frequency = nonemin((_min_frequency, self._min_frequency))
             self._max_frequency = nonemax((_max_frequency, self._max_frequency))
@@ -246,13 +245,15 @@ class Plot:
             sep = '\t'
             np.savetxt(filename, data,
                        delimiter=sep,
-                       header=sep.join(('frequency', 'voltage')) + '\n' + sep.join(('MHz', 'V')),
+                       header=sep.join(('frequency', 'voltage')) + '\n' + sep.join(('MHz', 'mV')),
                        fmt='%s')
         elif 'XLSX' in _filter:
             if filename_parts[1] != '.xlsx':
                 filename += '.xlsx'
             with pd.ExcelWriter(filename) as writer:
                 for i, (x, y) in enumerate(zip(self._plot_frequencies, self._plot_voltages)):
+                    if not self._plot_lines_labels[i]:
+                        continue
                     if self._max_mark is not None:
                         good = (x <= self._max_mark)
                         x = x[good]
@@ -265,5 +266,5 @@ class Plot:
                         del good
                     data = np.vstack((x, y)).transpose()
                     df = pd.DataFrame(data)
-                    df.to_excel(writer, index=False, header=['Frequency [MHz]', 'Voltage [V]'],
+                    df.to_excel(writer, index=False, header=['Frequency [MHz]', 'Voltage [mV]'],
                                 sheet_name=self._plot_lines_labels[i])

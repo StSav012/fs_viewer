@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+﻿#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 import sys
@@ -26,110 +26,111 @@ import backend
 
 mplstyle.use('fast')
 
-MAX_FREQUENCY: float = 175000.0
-MIN_FREQUENCY: float = 115000.0
-MAX_VOLTAGE: float = 617.0
-MIN_VOLTAGE: float = -MAX_VOLTAGE
+MAX_FREQUENCY = 175000.0
+MIN_FREQUENCY = 115000.0
+MAX_VOLTAGE = 617.0
+MIN_VOLTAGE = -MAX_VOLTAGE
 
 
 class App(QMainWindow):
     def __init__(self):
         super().__init__(flags=Qt.WindowFlags())
-        self.central_widget: QWidget = QWidget(self, flags=Qt.WindowFlags())
-        self.grid_layout: QGridLayout = QGridLayout(self.central_widget)
+        self.central_widget = QWidget(self, flags=Qt.WindowFlags())
+        self.grid_layout = QGridLayout(self.central_widget)
+        self.grid_layout.setColumnStretch(0, 1)
 
         # Frequency box
-        self.group_frequency: QGroupBox = QGroupBox(self.central_widget)
-        self.grid_layout_frequency: QGridLayout = QGridLayout(self.group_frequency)
+        self.group_frequency = QGroupBox(self.central_widget)
+        self.grid_layout_frequency = QGridLayout(self.group_frequency)
 
-        self.label_frequency_min: QLabel = QLabel(self.group_frequency)
-        self.label_frequency_max: QLabel = QLabel(self.group_frequency)
-        self.label_frequency_center: QLabel = QLabel(self.group_frequency)
-        self.label_frequency_span: QLabel = QLabel(self.group_frequency)
+        self.label_frequency_min = QLabel(self.group_frequency)
+        self.label_frequency_max = QLabel(self.group_frequency)
+        self.label_frequency_center = QLabel(self.group_frequency)
+        self.label_frequency_span = QLabel(self.group_frequency)
 
-        self.spin_frequency_min: QDoubleSpinBox = QDoubleSpinBox(self.group_frequency)
+        self.spin_frequency_min = QDoubleSpinBox(self.group_frequency)
         self.spin_frequency_min.setMinimum(MIN_FREQUENCY)
         self.spin_frequency_min.setMaximum(MAX_FREQUENCY)
-        self.spin_frequency_max: QDoubleSpinBox = QDoubleSpinBox(self.group_frequency)
+        self.spin_frequency_max = QDoubleSpinBox(self.group_frequency)
         self.spin_frequency_max.setMinimum(MIN_FREQUENCY)
         self.spin_frequency_max.setMaximum(MAX_FREQUENCY)
-        self.spin_frequency_center: QDoubleSpinBox = QDoubleSpinBox(self.group_frequency)
+        self.spin_frequency_center = QDoubleSpinBox(self.group_frequency)
         self.spin_frequency_center.setMinimum(MIN_FREQUENCY)
         self.spin_frequency_center.setMaximum(MAX_FREQUENCY)
-        self.spin_frequency_span: QDoubleSpinBox = QDoubleSpinBox(self.group_frequency)
+        self.spin_frequency_span = QDoubleSpinBox(self.group_frequency)
         self.spin_frequency_span.setMinimum(0.01)
         self.spin_frequency_span.setMaximum(MAX_FREQUENCY - MIN_FREQUENCY)
 
-        self.check_frequency_persists: QCheckBox = QCheckBox(self.group_frequency)
+        self.check_frequency_persists = QCheckBox(self.group_frequency)
 
         # Zoom X
-        self.button_zoom_x_out_coarse: QPushButton = QPushButton(self.group_frequency)
-        self.button_zoom_x_out_fine: QPushButton = QPushButton(self.group_frequency)
-        self.button_zoom_x_in_fine: QPushButton = QPushButton(self.group_frequency)
-        self.button_zoom_x_in_coarse: QPushButton = QPushButton(self.group_frequency)
+        self.button_zoom_x_out_coarse = QPushButton(self.group_frequency)
+        self.button_zoom_x_out_fine = QPushButton(self.group_frequency)
+        self.button_zoom_x_in_fine = QPushButton(self.group_frequency)
+        self.button_zoom_x_in_coarse = QPushButton(self.group_frequency)
 
         # Move X
-        self.button_move_x_left_coarse: QPushButton = QPushButton(self.group_frequency)
-        self.button_move_x_left_fine: QPushButton = QPushButton(self.group_frequency)
-        self.button_move_x_right_fine: QPushButton = QPushButton(self.group_frequency)
-        self.button_move_x_right_coarse: QPushButton = QPushButton(self.group_frequency)
+        self.button_move_x_left_coarse = QPushButton(self.group_frequency)
+        self.button_move_x_left_fine = QPushButton(self.group_frequency)
+        self.button_move_x_right_fine = QPushButton(self.group_frequency)
+        self.button_move_x_right_coarse = QPushButton(self.group_frequency)
 
         # Voltage box
-        self.group_voltage: QGroupBox = QGroupBox(self.central_widget)
-        self.grid_layout_voltage: QGridLayout = QGridLayout(self.group_voltage)
+        self.group_voltage = QGroupBox(self.central_widget)
+        self.grid_layout_voltage = QGridLayout(self.group_voltage)
 
-        self.label_voltage_min: QLabel = QLabel(self.group_voltage)
-        self.label_voltage_max: QLabel = QLabel(self.group_voltage)
+        self.label_voltage_min = QLabel(self.group_voltage)
+        self.label_voltage_max = QLabel(self.group_voltage)
 
-        self.spin_voltage_min: QDoubleSpinBox = QDoubleSpinBox(self.group_voltage)
+        self.spin_voltage_min = QDoubleSpinBox(self.group_voltage)
         self.spin_voltage_min.setMinimum(MIN_VOLTAGE)
         self.spin_voltage_min.setMaximum(MAX_VOLTAGE)
-        self.spin_voltage_max: QDoubleSpinBox = QDoubleSpinBox(self.group_voltage)
+        self.spin_voltage_max = QDoubleSpinBox(self.group_voltage)
         self.spin_voltage_max.setMinimum(MIN_VOLTAGE)
         self.spin_voltage_max.setMaximum(MAX_VOLTAGE)
 
-        self.check_voltage_persists: QCheckBox = QCheckBox(self.group_voltage)
+        self.check_voltage_persists = QCheckBox(self.group_voltage)
 
         # Zoom Y
-        self.button_zoom_y_out_coarse: QPushButton = QPushButton(self.group_voltage)
-        self.button_zoom_y_out_fine: QPushButton = QPushButton(self.group_voltage)
-        self.button_zoom_y_in_fine: QPushButton = QPushButton(self.group_voltage)
-        self.button_zoom_y_in_coarse: QPushButton = QPushButton(self.group_voltage)
+        self.button_zoom_y_out_coarse = QPushButton(self.group_voltage)
+        self.button_zoom_y_out_fine = QPushButton(self.group_voltage)
+        self.button_zoom_y_in_fine = QPushButton(self.group_voltage)
+        self.button_zoom_y_in_coarse = QPushButton(self.group_voltage)
 
         # Frequency Mark box
-        self.group_mark: QGroupBox = QGroupBox(self.central_widget)
-        self.grid_layout_mark: QGridLayout = QGridLayout(self.group_mark)
+        self.group_mark = QGroupBox(self.central_widget)
+        self.grid_layout_mark = QGridLayout(self.group_mark)
 
-        self.label_mark_min: QLabel = QLabel(self.group_mark)
-        self.label_mark_max: QLabel = QLabel(self.group_mark)
+        self.label_mark_min = QLabel(self.group_mark)
+        self.label_mark_max = QLabel(self.group_mark)
 
-        self.spin_mark_min: QDoubleSpinBox = QDoubleSpinBox(self.group_mark)
+        self.spin_mark_min = QDoubleSpinBox(self.group_mark)
         self.spin_mark_min.setMinimum(MIN_FREQUENCY)
         self.spin_mark_min.setMaximum(MAX_FREQUENCY)
-        self.spin_mark_max: QDoubleSpinBox = QDoubleSpinBox(self.group_mark)
+        self.spin_mark_max = QDoubleSpinBox(self.group_mark)
         self.spin_mark_max.setMinimum(MIN_FREQUENCY)
         self.spin_mark_max.setMaximum(MAX_FREQUENCY)
         self.spin_mark_min.setValue(MIN_FREQUENCY)
         self.spin_mark_max.setValue(MAX_FREQUENCY)
-        self.button_zoom_to_selection: QPushButton = QPushButton(self.group_mark)
+        self.button_zoom_to_selection = QPushButton(self.group_mark)
 
         # plot
-        self.figure: Figure = Figure()
-        self.canvas: FigureCanvas = FigureCanvas(self.figure)
+        self.figure = Figure()
+        self.canvas = FigureCanvas(self.figure)
         self.canvas.setFocusPolicy(Qt.ClickFocus)
-        self.plot_toolbar: NavigationToolbar = NavigationToolbar(self.canvas, self)
-        self.plot_mark_action: QAction = QAction(self.plot_toolbar)
-        self.plot_trace_action: QAction = QAction(self.plot_toolbar)
+        self.plot_toolbar = NavigationToolbar(self.canvas, self)
+        self.plot_mark_action = QAction(self.plot_toolbar)
+        self.plot_trace_action = QAction(self.plot_toolbar)
         self.plot_widget = self.figure.add_subplot(1, 1, 1)
         self.plot = backend.Plot(figure=self.plot_widget,
                                  canvas=self.canvas)
-        self.plot_trace_cursor: mplcursors.Cursor = mplcursors.cursor(self.plot.lines,
-                                                                      bindings={'left': 'left', 'right': 'right'})
+        self.plot_trace_cursor = mplcursors.cursor(self.plot.lines,
+                                                   bindings={'left': 'left', 'right': 'right'})
         self.plot_trace_cursor.enabled = False
 
         self.setup_ui(self)
 
-        self.settings: QSettings = QSettings("SavSoft", "Fast Sweep Viewer")
+        self.settings = QSettings("SavSoft", "Fast Sweep Viewer")
         # prevent config from being re-written while loading
         self._loading = True
         # config
@@ -137,10 +138,10 @@ class App(QMainWindow):
 
         # plot toolbar
         new_toolitems = (
-            ('Open', 'Open Data', 'open.svg', self.load_data),
-            ('Save Data', 'Save the data as text', 'savetable.svg',
+            ('Open', 'Open Data', 'open.png', self.load_data),
+            ('Save Data', 'Save the data as text', 'savetable.png',
              lambda: self.plot.save_data(*self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)"))),
-            ('Clear', 'Clear', 'delete.svg', self.plot.clear),
+            ('Clear', 'Clear', 'delete.png', self.plot.clear),
         )
         for text, tooltip_text, icon_name, callback in new_toolitems:
             if text is None:
@@ -157,7 +158,7 @@ class App(QMainWindow):
                     a.setIcon(icon)
                 self.plot_toolbar.addAction(a)
         for a, i in zip([self.plot_mark_action, self.plot_trace_action],
-                        ['measureline.svg', 'selectobject.svg']):
+                        ['measureline.png', 'selectobject.png']):
             icon = QIcon()
             icon.addPixmap(QPixmap(os.path.join('img', i)), QIcon.Normal, QIcon.Off)
             a.setIcon(icon)
@@ -195,28 +196,25 @@ class App(QMainWindow):
 
     def setup_ui(self, main_window):
         main_window.resize(484, 441)
-        icon = QIcon()
-        icon.addPixmap(QPixmap(os.path.join('img', 'sweep.svg')),
-                       QIcon.Normal, QIcon.Off)
-        main_window.setWindowIcon(icon)
+        main_window.setWindowIcon(QIcon(os.path.abspath(os.path.join('img', 'sweep.png'))))
 
         self.plot_mark_action.setCheckable(True)
         self.plot_trace_action.setCheckable(True)
 
-        self.grid_layout_frequency.addWidget(self.label_frequency_min, 0, 0, 1, 2)
-        self.grid_layout_frequency.addWidget(self.label_frequency_max, 1, 0, 1, 2)
+        self.grid_layout_frequency.addWidget(self.label_frequency_min, 1, 0, 1, 2)
+        self.grid_layout_frequency.addWidget(self.label_frequency_max, 0, 0, 1, 2)
         self.grid_layout_frequency.addWidget(self.label_frequency_center, 2, 0, 1, 2)
         self.grid_layout_frequency.addWidget(self.label_frequency_span, 3, 0, 1, 2)
-        self.grid_layout_frequency.addWidget(self.spin_frequency_min, 0, 2, 1, 2)
-        self.grid_layout_frequency.addWidget(self.spin_frequency_max, 1, 2, 1, 2)
+        self.grid_layout_frequency.addWidget(self.spin_frequency_min, 1, 2, 1, 2)
+        self.grid_layout_frequency.addWidget(self.spin_frequency_max, 0, 2, 1, 2)
         self.grid_layout_frequency.addWidget(self.spin_frequency_center, 2, 2, 1, 2)
         self.grid_layout_frequency.addWidget(self.spin_frequency_span, 3, 2, 1, 2)
         self.grid_layout_frequency.addWidget(self.check_frequency_persists, 4, 0, 1, 4)
 
-        self.grid_layout_voltage.addWidget(self.label_voltage_min, 0, 0, 1, 2)
-        self.grid_layout_voltage.addWidget(self.label_voltage_max, 1, 0, 1, 2)
-        self.grid_layout_voltage.addWidget(self.spin_voltage_min, 0, 2, 1, 2)
-        self.grid_layout_voltage.addWidget(self.spin_voltage_max, 1, 2, 1, 2)
+        self.grid_layout_voltage.addWidget(self.label_voltage_min, 1, 0, 1, 2)
+        self.grid_layout_voltage.addWidget(self.label_voltage_max, 0, 0, 1, 2)
+        self.grid_layout_voltage.addWidget(self.spin_voltage_min, 1, 2, 1, 2)
+        self.grid_layout_voltage.addWidget(self.spin_voltage_max, 0, 2, 1, 2)
         self.grid_layout_voltage.addWidget(self.check_voltage_persists, 2, 0, 1, 4)
 
         self.grid_layout_frequency.addWidget(self.button_zoom_x_out_coarse, 5, 0)
@@ -234,17 +232,17 @@ class App(QMainWindow):
         self.grid_layout_voltage.addWidget(self.button_zoom_y_in_fine, 3, 2)
         self.grid_layout_voltage.addWidget(self.button_zoom_y_in_coarse, 3, 3)
 
-        self.grid_layout_mark.addWidget(self.label_mark_min, 0, 0)
-        self.grid_layout_mark.addWidget(self.label_mark_max, 1, 0)
-        self.grid_layout_mark.addWidget(self.spin_mark_min, 0, 1)
-        self.grid_layout_mark.addWidget(self.spin_mark_max, 1, 1)
+        self.grid_layout_mark.addWidget(self.label_mark_min, 1, 0)
+        self.grid_layout_mark.addWidget(self.label_mark_max, 0, 0)
+        self.grid_layout_mark.addWidget(self.spin_mark_min, 1, 1)
+        self.grid_layout_mark.addWidget(self.spin_mark_max, 0, 1)
         self.grid_layout_mark.addWidget(self.button_zoom_to_selection, 2, 0, 1, 2)
 
-        _value_label_interaction_flags: int = (Qt.LinksAccessibleByKeyboard
-                                               | Qt.LinksAccessibleByMouse
-                                               | Qt.TextBrowserInteraction
-                                               | Qt.TextSelectableByKeyboard
-                                               | Qt.TextSelectableByMouse)
+        _value_label_interaction_flags = (Qt.LinksAccessibleByKeyboard
+                                          | Qt.LinksAccessibleByMouse
+                                          | Qt.TextBrowserInteraction
+                                          | Qt.TextSelectableByKeyboard
+                                          | Qt.TextSelectableByMouse)
 
         self.grid_layout.addWidget(self.group_frequency, 1, 1)
         self.grid_layout.addWidget(self.group_voltage, 2, 1)
@@ -263,8 +261,8 @@ class App(QMainWindow):
         _translate = QCoreApplication.translate
         main_window.setWindowTitle(_translate("main_window", "Fast Sweep Viewer"))
 
-        suffix_mhz: str = ' ' + _translate("main_window", "MHz")
-        suffix_v: str = ' ' + _translate("main_window", "V")
+        suffix_mhz = ' ' + _translate("main_window", "MHz")
+        suffix_mv = ' ' + _translate("main_window", "mV")
 
         self.group_frequency.setTitle(_translate("main_window", "Frequency"))
         self.label_frequency_min.setText(_translate("main_window", "Minimum") + ':')
@@ -302,8 +300,8 @@ class App(QMainWindow):
         self.spin_frequency_max.setSuffix(suffix_mhz)
         self.spin_frequency_center.setSuffix(suffix_mhz)
         self.spin_frequency_span.setSuffix(suffix_mhz)
-        self.spin_voltage_min.setSuffix(suffix_v)
-        self.spin_voltage_max.setSuffix(suffix_v)
+        self.spin_voltage_min.setSuffix(suffix_mv)
+        self.spin_voltage_max.setSuffix(suffix_mv)
         self.spin_mark_min.setSuffix(suffix_mhz)
         self.spin_mark_max.setSuffix(suffix_mhz)
 
@@ -311,7 +309,7 @@ class App(QMainWindow):
         self.plot_trace_action.setIconText(_translate("main_window", "Trace"))
 
         self.plot_trace_cursor.connect("add", lambda sel: sel.annotation.set_text(
-            ('{:.3f}' + suffix_mhz + '\n{:.3f}' + suffix_v).format(*sel.annotation.xy)
+            ('{:.3f}' + suffix_mhz + '\n{:.3f}' + suffix_mv).format(*sel.annotation.xy)
         ))
 
     def closeEvent(self, event):
@@ -380,7 +378,7 @@ class App(QMainWindow):
         self._loading = False
         return
 
-    def get_config_value(self, section: str, key: str, default, _type):
+    def get_config_value(self, section, key, default, _type):
         if section not in self.settings.childGroups():
             return default
         self.settings.beginGroup(section)
@@ -487,7 +485,7 @@ class App(QMainWindow):
         self.plot.set_frequency_range(upper_value=max_freq, lower_value=min_freq)
         self._loading = False
 
-    def button_zoom_x_clicked(self, factor: float):
+    def button_zoom_x_clicked(self, factor):
         if self._loading:
             return
         freq_span = self.spin_frequency_span.value() * factor
@@ -505,7 +503,7 @@ class App(QMainWindow):
         self.plot.set_frequency_range(upper_value=max_freq, lower_value=min_freq)
         self._loading = False
 
-    def button_move_x_clicked(self, shift: float):
+    def button_move_x_clicked(self, shift):
         if self._loading:
             return
         freq_span = self.spin_frequency_span.value()
@@ -541,7 +539,7 @@ class App(QMainWindow):
         self.plot.set_voltage_range(upper_value=new_value)
         self._loading = False
 
-    def button_zoom_y_clicked(self, factor: float):
+    def button_zoom_y_clicked(self, factor):
         if self._loading:
             return
         min_voltage = self.spin_voltage_min.value()
@@ -603,7 +601,7 @@ class App(QMainWindow):
         if self._loading:
             return
         if event.inaxes is not None:
-            if event.dblclick:
+            if event.dblclick and not self.plot_mark_action.isChecked() and not self.plot_trace_action.isChecked():
                 min_freq, max_freq, min_voltage, max_voltage = self.plot.on_dblclick(event)
                 self.set_config_value('frequency', 'lower', min_freq)
                 self.set_config_value('frequency', 'upper', max_freq)
@@ -630,14 +628,23 @@ class App(QMainWindow):
                     else:
                         self.spin_mark_max.setValue(event.xdata)
 
-    @staticmethod
-    def open_file_dialog(_filter: str = ''):
-        filename, _filter = QFileDialog.getOpenFileName(filter=_filter, options=QFileDialog.DontUseNativeDialog)
+    def open_file_dialog(self, **kwargs):
+        directory = self.get_config_value('open', 'location', '', str)
+        filename, _filter = QFileDialog.getOpenFileName(**kwargs,
+                                                        directory=directory,
+                                                        options=QFileDialog.DontUseNativeDialog)
+        self.set_config_value('open', 'location', os.path.split(filename)[0])
         return filename, _filter
 
-    @staticmethod
-    def save_file_dialog(_filter: str = ''):
-        filename, _filter = QFileDialog.getSaveFileName(filter=_filter, options=QFileDialog.DontUseNativeDialog)
+    def save_file_dialog(self, **kwargs):
+        directory = self.get_config_value('save', 'location', '', str)
+        _filter = self.get_config_value('save', 'filter', '', str)
+        filename, _filter = QFileDialog.getSaveFileName(**kwargs,
+                                                        directory=directory,
+                                                        initialFilter=_filter,
+                                                        options=QFileDialog.DontUseNativeDialog)
+        self.set_config_value('save', 'location', os.path.split(filename)[0])
+        self.set_config_value('save', 'filter', _filter)
         return filename, _filter
 
 
