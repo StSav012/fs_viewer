@@ -155,7 +155,7 @@ class App(QMainWindow):
         new_toolitems = (
             ('Open', 'Open Data', 'open', self.load_data),
             ('Save Data', 'Save the data as text', 'savetable',
-             lambda: self.plot.save_data(*self.save_file_dialog(filter="CSV (*.csv);;XLSX (*.xlsx)"))),
+             lambda: self.plot.save_data(*self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)"))),
             ('Clear', 'Clear', 'delete', self.plot.clear),
         )
         for text, tooltip_text, icon_name, callback in new_toolitems:
@@ -430,7 +430,7 @@ class App(QMainWindow):
     def load_data(self):
         if self._loading:
             return
-        lims = self.plot.load_data(*self.open_file_dialog(filter="Spectrometer Settings (*.fmd);;All Files (*)"))
+        lims = self.plot.load_data(*self.open_file_dialog(_filter="Spectrometer Settings (*.fmd);;All Files (*)"))
         if lims is not None:
             min_freq, max_freq, min_voltage, max_voltage = lims
             self.set_config_value('frequency', 'lower', min_freq)
@@ -651,10 +651,9 @@ class App(QMainWindow):
             picked_y = []
             for sel in self.plot_trace_multiple_cursor.selections:
                 x, y = sel.annotation.xy
-                print(dir(sel.annotation))
                 picked_x.append(x)
                 picked_y.append(y)
-            filename, _filter = self.save_file_dialog(filter="CSV (*.csv);;XLSX (*.xlsx)")
+            filename, _filter = self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")
             if filename:
                 sep = '\t'
                 self.plot.save_arbitrary_data(picked_x, picked_y, filename, _filter,
@@ -705,20 +704,20 @@ class App(QMainWindow):
                     else:
                         self.spin_mark_max.setValue(event.xdata)
 
-    def open_file_dialog(self, **kwargs):
+    def open_file_dialog(self, _filter=''):
         directory = self.get_config_value('open', 'location', '', str)
-        filename, _filter = QFileDialog.getOpenFileName(**kwargs,
+        filename, _filter = QFileDialog.getOpenFileName(filter=_filter,
                                                         directory=directory,
                                                         options=QFileDialog.DontUseNativeDialog)
         self.set_config_value('open', 'location', os.path.split(filename)[0])
         return filename, _filter
 
-    def save_file_dialog(self, **kwargs):
+    def save_file_dialog(self, _filter=''):
         directory = self.get_config_value('save', 'location', '', str)
-        _filter = self.get_config_value('save', 'filter', '', str)
-        filename, _filter = QFileDialog.getSaveFileName(**kwargs,
+        initial_filter = self.get_config_value('save', 'filter', '', str)
+        filename, _filter = QFileDialog.getSaveFileName(filter=_filter,
                                                         directory=directory,
-                                                        initialFilter=_filter,
+                                                        initialFilter=initial_filter,
                                                         options=QFileDialog.DontUseNativeDialog)
         self.set_config_value('save', 'location', os.path.split(filename)[0])
         self.set_config_value('save', 'filter', _filter)

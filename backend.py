@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from matplotlib.pyplot import Line2D
+from matplotlib.legend import DraggableLegend
 
 FRAME_SIZE = 50.
 LINES_COUNT = 2
@@ -43,6 +44,8 @@ class Plot:
         self._figure.set_xlabel('Frequency [MHz]')
         self._figure.set_ylabel('Voltage [mV]')
         self._figure.format_coord = lambda x, y: '{:.3f} V\n{:.3f} MHz'.format(x, y)
+
+        self._legend = None
 
         self._plot_lines = [self._figure.plot(np.empty(0), label='_*empty*_ {} (not marked)'.format(i + 1))[0]
                             for i in range(LINES_COUNT)]
@@ -117,6 +120,18 @@ class Plot:
             elif isinstance(member, list):
                 yield from filter(lambda submember: isinstance(submember, Line2D), member)
 
+    @property
+    def marked_lines(self):
+        for member in self._plot_mark_lines:
+            if isinstance(member, Line2D):
+                yield member
+            elif isinstance(member, list):
+                yield from filter(lambda submember: isinstance(submember, Line2D), member)
+
+    @property
+    def labels(self):
+        yield from self._plot_lines_labels
+
     def on_dblclick(self, event):
         event.inaxes.set_autoscaley_on(True)
         event.inaxes.relim(visible_only=True)
@@ -181,6 +196,9 @@ class Plot:
         for line in self._plot_mark_lines:
             line.set_data(np.empty(0), np.empty(0))
         self._plot_lines_labels = ['_*empty*_'] * LINES_COUNT
+        if self._legend is not None:
+            self._legend.legend.remove()
+            del self._legend
         self._canvas.draw_idle()
 
     def load_data(self, filename, _filter):
@@ -208,7 +226,7 @@ class Plot:
                                                                                endpoint=False)]
             new_label_base = os.path.split(fn)[-1]
             new_label = new_label_base
-            i = 0
+            i = 1
             while new_label in self._plot_lines_labels[1:]:
                 i += 1
                 new_label = '{} ({})'.format(new_label_base, i)
@@ -219,6 +237,17 @@ class Plot:
             self._max_voltage = nonemax((self._max_voltage, np.max(self._plot_voltages[-1])))
             self.make_grid((self._min_frequency, self._max_frequency))
             self.draw_data(self._plot_frequencies, self._plot_voltages, (self._min_mark, self._max_mark))
+            if any(map(lambda l: not l.startswith('_'), self._plot_lines_labels)):
+                if self._legend is not None:
+                    self._legend.legend.remove()
+                    del self._legend
+                labels = []
+                lines = []
+                for i, lbl in enumerate(self._plot_lines_labels):
+                    if not lbl.startswith('_'):
+                        labels.append(lbl)
+                        lines.append(self._plot_mark_lines[i])
+                self._legend = DraggableLegend(self._figure.legend(lines, labels), use_blit=True)
             return self._min_frequency, self._max_frequency, self._min_voltage, self._max_voltage
         return None
 
