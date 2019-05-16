@@ -4,6 +4,8 @@
 import sys
 import os
 
+import numpy as np
+
 from PyQt5.QtCore import Qt, QCoreApplication, \
     QSettings, \
     QMetaObject
@@ -19,6 +21,7 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, \
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
+from matplotlib.pyplot import Line2D
 import matplotlib.style as mplstyle
 import mplcursors
 import pyperclip
@@ -31,6 +34,8 @@ MAX_FREQUENCY = 175000.0
 MIN_FREQUENCY = 115000.0
 MAX_VOLTAGE = 617.0
 MIN_VOLTAGE = -MAX_VOLTAGE
+
+TRACE_AVERAGING_RANGE = 250.
 
 IMAGE_EXT = '.svg' if sys.version_info > (3, 4,) else '.png'
 
@@ -346,17 +351,29 @@ class App(QMainWindow):
         self.spin_mark_min.setSuffix(suffix_mhz)
         self.spin_mark_max.setSuffix(suffix_mhz)
 
-        self.plot_save_data_action.setIconText(_translate("main_window", "Save Data"))
-        self.plot_mark_action.setIconText(_translate("main_window", "Mark"))
-        self.plot_trace_action.setIconText(_translate("main_window", "Trace"))
-        self.plot_trace_multiple_action.setIconText(_translate("main_window", "Trace Multiple"))
+        self.plot_save_data_action.setIconText(_translate("plot toolbar action", "Save Data"))
+        self.plot_mark_action.setIconText(_translate("plot toolbar action", "Mark"))
+        self.plot_trace_action.setIconText(_translate("plot toolbar action", "Trace"))
+        self.plot_trace_multiple_action.setIconText(_translate("plot toolbar action", "Trace Multiple"))
+        self.plot_copy_trace_action.setIconText(_translate("plot toolbar action", "Copy Traced"))
+        self.plot_save_trace_action.setIconText(_translate("plot toolbar action", "Save Traced"))
 
-        self.plot_trace_cursor.connect("add", lambda sel: sel.annotation.set_text(
-            ('{:.3f}' + suffix_mhz + '\n{:.3f}' + suffix_mv).format(*sel.annotation.xy)
-        ))
-        self.plot_trace_multiple_cursor.connect("add", lambda sel: sel.annotation.set_text(
-            ('{:.3f}' + suffix_mhz + '\n{:.3f}' + suffix_mv).format(*sel.annotation.xy)
-        ))
+        def annotation_text(sel):
+            x = sel.target[0]
+            y = sel.target[1]
+            line = sel.artist
+            good = np.abs(line.get_xdata() - x) < TRACE_AVERAGING_RANGE
+            average_y = np.mean(line.get_ydata()[good])
+            setattr(sel.target, 'offset', average_y)
+            return ('{:.3f}' + suffix_mhz + '\n'
+                    + '{:.3f}' + suffix_mv + '\n'
+                    + '{:.3f}' + suffix_mv + ' ' + _translate("main_window", "to mean")).format(x, y, y - average_y)
+
+        def cursor_add_action(sel):
+            sel.annotation.set_text(annotation_text(sel))
+
+        self.plot_trace_cursor.connect("add", cursor_add_action)
+        self.plot_trace_multiple_cursor.connect("add", cursor_add_action)
 
     def closeEvent(self, event):
         """ senseless joke in the loop """
@@ -679,33 +696,36 @@ class App(QMainWindow):
         elif self.plot_trace_cursor.enabled:
             selections = self.plot_trace_cursor.selections
         for sel in selections:
-            x, y = sel.annotation.xy
-            table += '{}{}{}\n'.format(x, sep, y)
+            x, y = sel.target.tolist()
+            offset = sel.target.offset
+            table += '{1}{0}{2}{0}{3}\n'.format(sep, x, y, y - offset)
         if table:
             pyperclip.copy(table)
 
     def plot_save_trace_action_triggered(self):
         picked_x = []
         picked_y = []
+        picked_dy = []
         selections = []
         if self.plot_trace_multiple_cursor.enabled:
             selections = self.plot_trace_multiple_cursor.selections
         elif self.plot_trace_cursor.enabled:
             selections = self.plot_trace_cursor.selections
         for sel in selections:
-            x, y = sel.annotation.xy
+            x, y = sel.target.tolist()
             picked_x.append(x)
             picked_y.append(y)
+            picked_dy.append(y - sel.target.offset)
         if not picked_x or not picked_y:
             return
         filename, _filter = self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")
         if filename:
             sep = '\t'
-            self.plot.save_arbitrary_data(picked_x, picked_y, filename, _filter,
-                                          csv_header=(sep.join(('frequency', 'voltage')) + '\n'
-                                                      + sep.join(('MHz', 'mV'))),
+            self.plot.save_arbitrary_data((picked_x, picked_y, picked_dy), filename, _filter,
+                                          csv_header=(sep.join(('frequency', 'voltage', 'voltage_to_mean')) + '\n'
+                                                      + sep.join(('MHz', 'mV', 'mV'))),
                                           csv_sep=sep,
-                                          xlsx_header=['Frequency [MHz]', 'Voltage [mV]'])
+                                          xlsx_header=['Frequency [MHz]', 'Voltage [mV]', 'Voltage to Mean [mV]'])
 
     def plot_on_click(self, event):
         if self._loading:

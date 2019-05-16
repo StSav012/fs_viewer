@@ -297,7 +297,7 @@ class Plot:
                                 sheet_name=self._plot_lines_labels[i])
 
     @staticmethod
-    def save_arbitrary_data(x, y, filename, _filter, *,
+    def save_arbitrary_data(data, filename, _filter, *,
                             csv_header='', csv_sep='\t',
                             xlsx_header=True, sheet_name='Markings'):
         if not filename:
@@ -306,7 +306,7 @@ class Plot:
         if 'CSV' in _filter:
             if filename_parts[1] != '.csv':
                 filename += '.csv'
-            data = np.vstack((x, y)).transpose()
+            data = np.vstack(data).transpose()
             np.savetxt(filename, data,
                        delimiter=csv_sep,
                        header=csv_header,
@@ -315,7 +315,7 @@ class Plot:
             if filename_parts[1] != '.xlsx':
                 filename += '.xlsx'
             with pd.ExcelWriter(filename) as writer:
-                data = np.vstack((x, y)).transpose()
+                data = np.vstack(data).transpose()
                 df = pd.DataFrame(data)
                 df.to_excel(writer, index=False, header=xlsx_header,
                             sheet_name=sheet_name)
