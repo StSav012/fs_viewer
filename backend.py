@@ -198,7 +198,6 @@ class Plot:
         self._plot_lines_labels = ['_*empty*_'] * LINES_COUNT
         if self._legend is not None:
             self._legend.legend.remove()
-            del self._legend
         self._canvas.draw_idle()
 
     def load_data(self, filename, _filter):
@@ -240,7 +239,6 @@ class Plot:
             if any(map(lambda l: not l.startswith('_'), self._plot_lines_labels)):
                 if self._legend is not None:
                     self._legend.legend.remove()
-                    del self._legend
                 labels = []
                 lines = []
                 for i, lbl in enumerate(self._plot_lines_labels):

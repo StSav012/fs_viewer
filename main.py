@@ -21,6 +21,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 import matplotlib.style as mplstyle
 import mplcursors
+import pyperclip
 
 import backend
 
@@ -130,8 +131,11 @@ class App(QMainWindow):
         self.canvas.setFocusPolicy(Qt.ClickFocus)
         self.plot_toolbar = NavigationToolbar(self.canvas, self)
         self.plot_mark_action = QAction(self.plot_toolbar)
+        self.plot_save_data_action = QAction(self.plot_toolbar)
         self.plot_trace_action = QAction(self.plot_toolbar)
         self.plot_trace_multiple_action = QAction(self.plot_toolbar)
+        self.plot_copy_trace_action = QAction(self.plot_toolbar)
+        self.plot_save_trace_action = QAction(self.plot_toolbar)
         self.plot_widget = self.figure.add_subplot(1, 1, 1)
         self.plot = backend.Plot(figure=self.plot_widget,
                                  canvas=self.canvas)
@@ -154,9 +158,7 @@ class App(QMainWindow):
         # TODO: add keyboard shortcuts
         new_toolitems = (
             ('Open', 'Open Data', 'open', self.load_data),
-            ('Save Data', 'Save the data as text', 'savetable',
-             lambda: self.plot.save_data(*self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)"))),
-            ('Clear', 'Clear', 'delete', self.plot.clear),
+            ('Clear', 'Clear', 'delete', lambda: self.plot_save_data_action.setEnabled(False) or self.plot.clear()),
         )
         for text, tooltip_text, icon_name, callback in new_toolitems:
             if text is None:
@@ -172,14 +174,21 @@ class App(QMainWindow):
                     icon.addPixmap(QPixmap(os.path.join('img', icon_name + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
                     a.setIcon(icon)
                 self.plot_toolbar.addAction(a)
-        for a, i in zip([self.plot_mark_action, self.plot_trace_action, self.plot_trace_multiple_action],
-                        ['measureline', 'selectobject', 'selectmultiple']):
+        for a, i in zip([self.plot_save_data_action, self.plot_mark_action, self.plot_trace_action,
+                         self.plot_trace_multiple_action, self.plot_copy_trace_action, self.plot_save_trace_action],
+                        ['savetable', 'measureline', 'selectobject', 'selectmultiple', 'copyselected', 'saveselected']):
             icon = QIcon()
             icon.addPixmap(QPixmap(os.path.join('img', i + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
             a.setIcon(icon)
+        self.plot_toolbar.addSeparator()
         self.plot_toolbar.addAction(self.plot_mark_action)
+        self.plot_toolbar.addAction(self.plot_save_data_action)
+        self.plot_save_data_action.setEnabled(False)
+        self.plot_toolbar.addSeparator()
         self.plot_toolbar.addAction(self.plot_trace_action)
         self.plot_toolbar.addAction(self.plot_trace_multiple_action)
+        self.plot_toolbar.addAction(self.plot_copy_trace_action)
+        self.plot_toolbar.addAction(self.plot_save_trace_action)
 
         # actions
         self.spin_frequency_min.valueChanged.connect(self.spin_frequency_min_changed)
@@ -206,9 +215,13 @@ class App(QMainWindow):
         self.button_mark_max_reset.clicked.connect(self.button_mark_max_reset_clicked)
         self.button_zoom_to_selection.clicked.connect(self.button_zoom_to_selection_clicked)
 
+        self.plot_save_data_action.triggered.connect(
+            lambda: self.plot.save_data(*self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")))
         self.plot_mark_action.toggled.connect(self.plot_mark_action_toggled)
         self.plot_trace_action.toggled.connect(self.plot_trace_action_toggled)
         self.plot_trace_multiple_action.toggled.connect(self.plot_trace_multiple_action_toggled)
+        self.plot_copy_trace_action.triggered.connect(self.plot_copy_trace_action_triggered)
+        self.plot_save_trace_action.triggered.connect(self.plot_save_trace_action_triggered)
 
         # dirty hack: the event doesn't work directly for subplots
         self.mpl_connect_cid = self.canvas.mpl_connect('button_press_event', self.plot_on_click)
@@ -333,6 +346,7 @@ class App(QMainWindow):
         self.spin_mark_min.setSuffix(suffix_mhz)
         self.spin_mark_max.setSuffix(suffix_mhz)
 
+        self.plot_save_data_action.setIconText(_translate("main_window", "Save Data"))
         self.plot_mark_action.setIconText(_translate("main_window", "Mark"))
         self.plot_trace_action.setIconText(_translate("main_window", "Trace"))
         self.plot_trace_multiple_action.setIconText(_translate("main_window", "Trace Multiple"))
@@ -464,6 +478,7 @@ class App(QMainWindow):
             self.plot.set_voltage_range(lower_value=self.spin_voltage_min.value(),
                                         upper_value=self.spin_voltage_max.value())
         self.figure.tight_layout()
+        self.plot_save_data_action.setEnabled(True)
 
     def spin_frequency_min_changed(self, new_value):
         if self._loading:
@@ -646,21 +661,6 @@ class App(QMainWindow):
             self.plot_mark_action.setChecked(False)
             self.plot_trace_action.setChecked(False)
             self.canvas.setFocus()
-        else:
-            picked_x = []
-            picked_y = []
-            for sel in self.plot_trace_multiple_cursor.selections:
-                x, y = sel.annotation.xy
-                picked_x.append(x)
-                picked_y.append(y)
-            filename, _filter = self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")
-            if filename:
-                sep = '\t'
-                self.plot.save_arbitrary_data(picked_x, picked_y, filename, _filter,
-                                              csv_header=(sep.join(('frequency', 'voltage')) + '\n'
-                                                          + sep.join(('MHz', 'mV'))),
-                                              csv_sep=sep,
-                                              xlsx_header=['Frequency [MHz]', 'Voltage [mV]'])
         if self.plot_toolbar.mode == 'zoom rect':
             self.plot_toolbar.zoom()
         elif self.plot_toolbar.mode == 'pan/zoom':
@@ -669,6 +669,43 @@ class App(QMainWindow):
         self.plot_trace_cursor.visible = False
         self.plot_trace_multiple_cursor.enabled = new_value
         self.plot_trace_multiple_cursor.visible = new_value
+
+    def plot_copy_trace_action_triggered(self):
+        sep = '\t'
+        table = ''
+        selections = []
+        if self.plot_trace_multiple_cursor.enabled:
+            selections = self.plot_trace_multiple_cursor.selections
+        elif self.plot_trace_cursor.enabled:
+            selections = self.plot_trace_cursor.selections
+        for sel in selections:
+            x, y = sel.annotation.xy
+            table += '{}{}{}\n'.format(x, sep, y)
+        if table:
+            pyperclip.copy(table)
+
+    def plot_save_trace_action_triggered(self):
+        picked_x = []
+        picked_y = []
+        selections = []
+        if self.plot_trace_multiple_cursor.enabled:
+            selections = self.plot_trace_multiple_cursor.selections
+        elif self.plot_trace_cursor.enabled:
+            selections = self.plot_trace_cursor.selections
+        for sel in selections:
+            x, y = sel.annotation.xy
+            picked_x.append(x)
+            picked_y.append(y)
+        if not picked_x or not picked_y:
+            return
+        filename, _filter = self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")
+        if filename:
+            sep = '\t'
+            self.plot.save_arbitrary_data(picked_x, picked_y, filename, _filter,
+                                          csv_header=(sep.join(('frequency', 'voltage')) + '\n'
+                                                      + sep.join(('MHz', 'mV'))),
+                                          csv_sep=sep,
+                                          xlsx_header=['Frequency [MHz]', 'Voltage [mV]'])
 
     def plot_on_click(self, event):
         if self._loading:
