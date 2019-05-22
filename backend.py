@@ -154,8 +154,7 @@ class Plot:
         self._max_mark = upper_value
         self.draw_data(self._plot_frequencies, self._plot_voltages, (lower_value, upper_value))
 
-    def draw_data(self, xs, ys,
-                  marks):
+    def draw_data(self, xs, ys, marks):
         for i, (x, y) in enumerate(zip(xs, ys)):
             left_x = np.empty(0)
             left_y = np.empty(0)

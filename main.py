@@ -21,7 +21,6 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, \
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-from matplotlib.pyplot import Line2D
 import matplotlib.style as mplstyle
 import mplcursors
 import pyperclip
@@ -35,9 +34,16 @@ MIN_FREQUENCY = 115000.0
 MAX_VOLTAGE = 617.0
 MIN_VOLTAGE = -MAX_VOLTAGE
 
-TRACE_AVERAGING_RANGE = 250.
+TRACE_AVERAGING_RANGE = 25.
 
-IMAGE_EXT = '.svg' if sys.version_info > (3, 4,) else '.png'
+IMAGE_EXT = '.svg'
+
+
+# https://www.reddit.com/r/learnpython/comments/4kjie3/how_to_include_gui_images_with_pyinstaller/d3gjmom
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(getattr(sys, '_MEIPASS'), relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 
 class App(QMainWindow):
@@ -125,9 +131,7 @@ class App(QMainWindow):
         self.button_mark_min_reset = QPushButton(self.group_mark)
         self.button_mark_max_reset = QPushButton(self.group_mark)
         for b in (self.button_mark_min_reset, self.button_mark_max_reset):
-            icon = QIcon()
-            icon.addPixmap(QPixmap(os.path.join('img', 'reset' + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
-            b.setIcon(icon)
+            b.setIcon(self.load_icon('reset'))
         self.button_zoom_to_selection = QPushButton(self.group_mark)
 
         # plot
@@ -135,6 +139,8 @@ class App(QMainWindow):
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setFocusPolicy(Qt.ClickFocus)
         self.plot_toolbar = NavigationToolbar(self.canvas, self)
+        self.plot_open_action = QAction(self.plot_toolbar)
+        self.plot_clear_action = QAction(self.plot_toolbar)
         self.plot_mark_action = QAction(self.plot_toolbar)
         self.plot_save_data_action = QAction(self.plot_toolbar)
         self.plot_trace_action = QAction(self.plot_toolbar)
@@ -161,39 +167,32 @@ class App(QMainWindow):
 
         # plot toolbar
         # TODO: add keyboard shortcuts
-        new_toolitems = (
-            ('Open', 'Open Data', 'open', self.load_data),
-            ('Clear', 'Clear', 'delete', lambda: self.plot_save_data_action.setEnabled(False) or self.plot.clear()),
-        )
-        for text, tooltip_text, icon_name, callback in new_toolitems:
-            if text is None:
-                self.plot_toolbar.addSeparator()
-            else:
-                a = QAction(self.plot_toolbar)
-                a.setIconText(text)
-                a.triggered.connect(callback)
-                if tooltip_text is not None:
-                    a.setToolTip(tooltip_text)
-                if icon_name is not None:
-                    icon = QIcon()
-                    icon.addPixmap(QPixmap(os.path.join('img', icon_name + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
-                    a.setIcon(icon)
-                self.plot_toolbar.addAction(a)
-        for a, i in zip([self.plot_save_data_action, self.plot_mark_action, self.plot_trace_action,
-                         self.plot_trace_multiple_action, self.plot_copy_trace_action, self.plot_save_trace_action],
-                        ['savetable', 'measureline', 'selectobject', 'selectmultiple', 'copyselected', 'saveselected']):
-            icon = QIcon()
-            icon.addPixmap(QPixmap(os.path.join('img', i + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
-            a.setIcon(icon)
+        for a, i in zip([self.plot_open_action, self.plot_clear_action,
+                         self.plot_save_data_action, self.plot_mark_action,
+                         self.plot_trace_action, self.plot_trace_multiple_action,
+                         self.plot_copy_trace_action, self.plot_save_trace_action],
+                        ['open', 'delete',
+                         'savetable', 'measureline',
+                         'selectobject', 'selectmultiple',
+                         'copyselected', 'saveselected']):
+            a.setIcon(self.load_icon(i))
+        self.plot_toolbar.addAction(self.plot_open_action)
+        self.plot_toolbar.addAction(self.plot_clear_action)
         self.plot_toolbar.addSeparator()
         self.plot_toolbar.addAction(self.plot_mark_action)
         self.plot_toolbar.addAction(self.plot_save_data_action)
-        self.plot_save_data_action.setEnabled(False)
         self.plot_toolbar.addSeparator()
         self.plot_toolbar.addAction(self.plot_trace_action)
         self.plot_toolbar.addAction(self.plot_trace_multiple_action)
         self.plot_toolbar.addAction(self.plot_copy_trace_action)
         self.plot_toolbar.addAction(self.plot_save_trace_action)
+        self.plot_clear_action.setEnabled(False)
+        self.plot_mark_action.setEnabled(False)
+        self.plot_save_data_action.setEnabled(False)
+        self.plot_trace_action.setEnabled(False)
+        self.plot_trace_multiple_action.setEnabled(False)
+        self.plot_copy_trace_action.setEnabled(False)
+        self.plot_save_trace_action.setEnabled(False)
 
         # actions
         self.spin_frequency_min.valueChanged.connect(self.spin_frequency_min_changed)
@@ -220,6 +219,8 @@ class App(QMainWindow):
         self.button_mark_max_reset.clicked.connect(self.button_mark_max_reset_clicked)
         self.button_zoom_to_selection.clicked.connect(self.button_zoom_to_selection_clicked)
 
+        self.plot_open_action.triggered.connect(self.load_data)
+        self.plot_clear_action.triggered.connect(self.clear)
         self.plot_save_data_action.triggered.connect(
             lambda: self.plot.save_data(*self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")))
         self.plot_mark_action.toggled.connect(self.plot_mark_action_toggled)
@@ -233,9 +234,7 @@ class App(QMainWindow):
 
     def setup_ui(self, main_window):
         main_window.resize(484, 441)
-        icon = QIcon()
-        icon.addPixmap(QPixmap(os.path.join('img', 'sweep' + IMAGE_EXT)), QIcon.Normal, QIcon.Off)
-        main_window.setWindowIcon(icon)
+        main_window.setWindowIcon(self.load_icon('sweep'))
 
         self.plot_mark_action.setCheckable(True)
         self.plot_trace_action.setCheckable(True)
@@ -351,12 +350,18 @@ class App(QMainWindow):
         self.spin_mark_min.setSuffix(suffix_mhz)
         self.spin_mark_max.setSuffix(suffix_mhz)
 
-        self.plot_save_data_action.setIconText(_translate("plot toolbar action", "Save Data"))
+        self.plot_open_action.setIconText(_translate("plot toolbar action", "Open"))
+        self.plot_open_action.setToolTip(_translate("plot toolbar action", "Load spectrometer data"))
+        self.plot_clear_action.setIconText(_translate("plot toolbar action", "Clear"))
         self.plot_mark_action.setIconText(_translate("plot toolbar action", "Mark"))
+        self.plot_save_data_action.setIconText(_translate("plot toolbar action", "Save Data"))
+        self.plot_save_data_action.setToolTip(_translate("plot toolbar action", "Export data"))
         self.plot_trace_action.setIconText(_translate("plot toolbar action", "Trace"))
         self.plot_trace_multiple_action.setIconText(_translate("plot toolbar action", "Trace Multiple"))
         self.plot_copy_trace_action.setIconText(_translate("plot toolbar action", "Copy Traced"))
+        self.plot_copy_trace_action.setToolTip(_translate("plot toolbar action", "Copy trace points into clipboard"))
         self.plot_save_trace_action.setIconText(_translate("plot toolbar action", "Save Traced"))
+        self.plot_save_trace_action.setToolTip(_translate("plot toolbar action", "Save trace points"))
 
         def annotation_text(sel):
             x = sel.target[0]
@@ -377,22 +382,22 @@ class App(QMainWindow):
 
     def closeEvent(self, event):
         """ senseless joke in the loop """
-        close = QMessageBox.No
-        while close == QMessageBox.No:
+        close_code = QMessageBox.No
+        while close_code == QMessageBox.No:
             close = QMessageBox()
             close.setText("Are you sure?")
             close.setIcon(QMessageBox.Question)
             close.setWindowIcon(self.windowIcon())
             close.setWindowTitle(self.windowTitle())
             close.setStandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
-            close = close.exec()
+            close_code = close.exec()
 
-            if close == QMessageBox.Yes:
+            if close_code == QMessageBox.Yes:
                 self.settings.setValue("windowGeometry", self.saveGeometry())
                 self.settings.setValue("windowState", self.saveState())
                 self.settings.sync()
                 event.accept()
-            elif close == QMessageBox.Cancel:
+            elif close_code == QMessageBox.Cancel:
                 event.ignore()
         return
 
@@ -458,6 +463,12 @@ class App(QMainWindow):
         self.settings.setValue(key, value)
         self.settings.endGroup()
 
+    @staticmethod
+    def load_icon(filename):
+        icon = QIcon()
+        icon.addPixmap(QPixmap(resource_path(os.path.join('img', filename + IMAGE_EXT))), QIcon.Normal, QIcon.Off)
+        return icon
+
     def load_data(self):
         if self._loading:
             return
@@ -495,7 +506,13 @@ class App(QMainWindow):
             self.plot.set_voltage_range(lower_value=self.spin_voltage_min.value(),
                                         upper_value=self.spin_voltage_max.value())
         self.figure.tight_layout()
+        self.plot_clear_action.setEnabled(True)
+        self.plot_mark_action.setEnabled(True)
         self.plot_save_data_action.setEnabled(True)
+        self.plot_trace_action.setEnabled(True)
+        self.plot_trace_multiple_action.setEnabled(True)
+        self.plot_copy_trace_action.setEnabled(True)
+        self.plot_save_trace_action.setEnabled(True)
 
     def spin_frequency_min_changed(self, new_value):
         if self._loading:
@@ -761,21 +778,42 @@ class App(QMainWindow):
                     else:
                         self.spin_mark_max.setValue(event.xdata)
 
+    def clear(self):
+        self.plot.clear()
+        for sel in self.plot_trace_multiple_cursor.selections:
+            self.plot_trace_multiple_cursor.remove_selection(sel)
+        for sel in self.plot_trace_cursor.selections:
+            self.plot_trace_cursor.remove_selection(sel)
+        self.plot_mark_action.setChecked(False)
+        self.plot_trace_action.setChecked(False)
+        self.plot_trace_multiple_action.setChecked(False)
+        self.plot_clear_action.setEnabled(False)
+        self.plot_mark_action.setEnabled(False)
+        self.plot_save_data_action.setEnabled(False)
+        self.plot_trace_action.setEnabled(False)
+        self.plot_trace_multiple_action.setEnabled(False)
+        self.plot_copy_trace_action.setEnabled(False)
+        self.plot_save_trace_action.setEnabled(False)
+
     def open_file_dialog(self, _filter=''):
         directory = self.get_config_value('open', 'location', '', str)
+        # native dialog misbehaves when running inside snap but Qt dialog is tortoise-like in NT
+        options = QFileDialog.DontUseNativeDialog if os.name != 'nt' else QFileDialog.DontUseSheet
         filename, _filter = QFileDialog.getOpenFileName(filter=_filter,
                                                         directory=directory,
-                                                        options=QFileDialog.DontUseNativeDialog)
+                                                        options=options)
         self.set_config_value('open', 'location', os.path.split(filename)[0])
         return filename, _filter
 
     def save_file_dialog(self, _filter=''):
         directory = self.get_config_value('save', 'location', '', str)
         initial_filter = self.get_config_value('save', 'filter', '', str)
+        # native dialog misbehaves when running inside snap but Qt dialog is tortoise-like in NT
+        options = QFileDialog.DontUseNativeDialog if os.name != 'nt' else QFileDialog.DontUseSheet
         filename, _filter = QFileDialog.getSaveFileName(filter=_filter,
                                                         directory=directory,
                                                         initialFilter=initial_filter,
-                                                        options=QFileDialog.DontUseNativeDialog)
+                                                        options=options)
         self.set_config_value('save', 'location', os.path.split(filename)[0])
         self.set_config_value('save', 'filter', _filter)
         return filename, _filter
