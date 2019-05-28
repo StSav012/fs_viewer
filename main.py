@@ -147,9 +147,11 @@ class App(QMainWindow):
         self.plot_trace_multiple_action = QAction(self.plot_toolbar)
         self.plot_copy_trace_action = QAction(self.plot_toolbar)
         self.plot_save_trace_action = QAction(self.plot_toolbar)
-        self.plot_widget = self.figure.add_subplot(1, 1, 1)
-        self.plot = backend.Plot(figure=self.plot_widget,
-                                 canvas=self.canvas)
+        self.legend_figure = Figure(constrained_layout=True, frameon=False)
+        self.legend_canvas = FigureCanvas(self.legend_figure)
+        self.plot = backend.Plot(figure=self.figure,
+                                 canvas=self.canvas,
+                                 legend_figure=self.legend_figure)
         self.plot_trace_cursor = mplcursors.cursor(self.plot.lines,
                                                    bindings={'left': 'left', 'right': 'right'})
         self.plot_trace_cursor.enabled = False
@@ -285,12 +287,13 @@ class App(QMainWindow):
                                           | Qt.TextSelectableByKeyboard
                                           | Qt.TextSelectableByMouse)
 
-        self.grid_layout.addWidget(self.group_frequency, 1, 1)
-        self.grid_layout.addWidget(self.group_voltage, 2, 1)
-        self.grid_layout.addWidget(self.group_mark, 3, 1)
+        self.grid_layout.addWidget(self.group_frequency, 2, 1)
+        self.grid_layout.addWidget(self.group_voltage, 3, 1)
+        self.grid_layout.addWidget(self.group_mark, 4, 1)
 
         self.grid_layout.addWidget(self.plot_toolbar, 0, 0, 1, 2)
-        self.grid_layout.addWidget(self.canvas, 1, 0, 3, 1)
+        self.grid_layout.addWidget(self.canvas, 1, 0, 4, 1)
+        self.grid_layout.addWidget(self.legend_canvas, 1, 1)
 
         self.setCentralWidget(self.central_widget)
 
@@ -370,7 +373,8 @@ class App(QMainWindow):
             good = np.abs(line.get_xdata() - x) < TRACE_AVERAGING_RANGE
             average_y = np.mean(line.get_ydata()[good])
             setattr(sel.target, 'offset', average_y)
-            return ('{:.3f}' + suffix_mhz + '\n'
+            return (line.original_label + '\n'
+                    + '{:.3f}' + suffix_mhz + '\n'
                     + '{:.3f}' + suffix_mv + '\n'
                     + '{:.3f}' + suffix_mv + ' ' + _translate("main_window", "to mean")).format(x, y, y - average_y)
 
@@ -715,30 +719,43 @@ class App(QMainWindow):
         for sel in selections:
             x, y = sel.target.tolist()
             offset = sel.target.offset
-            table += '{1}{0}{2}{0}{3}\n'.format(sep, x, y, y - offset)
+            table += '{1}{0}{2}{0}{3}{0}"{4}"\n'.format(sep, x, y, y - offset, sel.artist.original_label)
         if table:
             pyperclip.copy(table)
 
     def plot_save_trace_action_triggered(self):
-        picked_x = []
-        picked_y = []
-        picked_dy = []
         selections = []
         if self.plot_trace_multiple_cursor.enabled:
             selections = self.plot_trace_multiple_cursor.selections
         elif self.plot_trace_cursor.enabled:
             selections = self.plot_trace_cursor.selections
+
+        labels = []
         for sel in selections:
-            x, y = sel.target.tolist()
-            picked_x.append(x)
-            picked_y.append(y)
-            picked_dy.append(y - sel.target.offset)
-        if not picked_x or not picked_y:
-            return
+            label = sel.artist.original_label
+            if label not in labels:
+                labels.append(label)
+
+        data = dict()
+        for label in labels:
+            picked_x = []
+            picked_y = []
+            picked_dy = []
+            for sel in selections:
+                if sel.artist.original_label != label:
+                    continue
+                x, y = sel.target.tolist()
+                picked_x.append(x)
+                picked_y.append(y)
+                picked_dy.append(y - sel.target.offset)
+            if not picked_x or not picked_y:
+                continue
+            data[label] = (picked_x, picked_y, picked_dy)
+
         filename, _filter = self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")
         if filename:
             sep = '\t'
-            self.plot.save_arbitrary_data((picked_x, picked_y, picked_dy), filename, _filter,
+            self.plot.save_arbitrary_data(data, filename, _filter,
                                           csv_header=(sep.join(('frequency', 'voltage', 'voltage_to_mean')) + '\n'
                                                       + sep.join(('MHz', 'mV', 'mV'))),
                                           csv_sep=sep,

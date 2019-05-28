@@ -3,7 +3,6 @@ import os
 import numpy as np
 import pandas as pd
 from matplotlib.pyplot import Line2D
-from matplotlib.legend import DraggableLegend
 
 FRAME_SIZE = 50.
 LINES_COUNT = 2
@@ -37,19 +36,30 @@ def nonemax(x):
 
 
 class Plot:
-    def __init__(self, figure, canvas):
+    def __init__(self, figure, canvas, legend_figure=None):
         self._canvas = canvas
+        self._canvas.draw()
 
-        self._figure = figure
+        self._legend_figure = legend_figure
+        if self._legend_figure is not None:
+            self._legend_figure.canvas.setMaximumWidth(0)
+            self._legend_figure.canvas.setMaximumHeight(0)
+            self._legend_figure.canvas.setStyleSheet("background-color:transparent;")
+            self._legend_figure.canvas.draw()
+            # self._legend_figure.canvas.setVisible(False)
+
+        self._figure = figure.add_subplot(1, 1, 1)
         self._figure.set_xlabel('Frequency [MHz]')
         self._figure.set_ylabel('Voltage [mV]')
-        self._figure.format_coord = lambda x, y: '{:.3f} V\n{:.3f} MHz'.format(x, y)
+        self._figure.format_coord = lambda x, y: '{:.3f} mV\n{:.3f} MHz'.format(y, x)
 
         self._legend = None
 
-        self._plot_lines = [self._figure.plot(np.empty(0), label='_*empty*_ {} (not marked)'.format(i + 1))[0]
+        self._plot_lines = [self._figure.plot(np.empty(0), label='_*empty*_ {} (not marked)'.format(i + 1),
+                                              animated=False)[0]
                             for i in range(LINES_COUNT)]
-        self._plot_mark_lines = [self._figure.plot(np.empty(0), label='_*empty*_ {} (marked)'.format(i + 1))[0]
+        self._plot_mark_lines = [self._figure.plot(np.empty(0), label='_*empty*_ {} (marked)'.format(i + 1),
+                                                   animated=False)[0]
                                  for i in range(LINES_COUNT)]
         self._plot_lines_labels = ['_*empty*_'] * LINES_COUNT
         self._plot_frequencies = [np.empty(0)] * LINES_COUNT
@@ -67,6 +77,8 @@ class Plot:
         self._axvlines = [self._figure.axvline(np.nan, color='grey', linewidth=0.5,
                                                label='_ vertical line {}'.format(i + 1))
                           for i in range(GRID_LINES_COUNT)]
+
+        self._ignore_scale_change = False
 
     def make_grid(self, xlim):
         if any(map(lambda lim: lim is None, xlim)):
@@ -97,6 +109,8 @@ class Plot:
     #     axes.set_autoscalex_on(autoscale)
 
     def on_xlim_changed(self, axes):
+        if self._ignore_scale_change:
+            return
         xlim = axes.get_xlim()
         self.make_grid(xlim)
 
@@ -155,6 +169,7 @@ class Plot:
         self.draw_data(self._plot_frequencies, self._plot_voltages, (lower_value, upper_value))
 
     def draw_data(self, xs, ys, marks):
+        self._ignore_scale_change = True
         for i, (x, y) in enumerate(zip(xs, ys)):
             left_x = np.empty(0)
             left_y = np.empty(0)
@@ -183,9 +198,12 @@ class Plot:
                 self._figure.set_ylim(self._min_voltage, self._max_voltage)
             self._plot_lines[i].set_data(side_x, side_y)
             self._plot_lines[i].set_label(self._plot_lines_labels[i] + ' (not marked)')
+            setattr(self._plot_lines[i], 'original_label', self._plot_lines_labels[i])
             self._plot_mark_lines[i].set_data(middle_x, middle_y)
             self._plot_mark_lines[i].set_label(self._plot_lines_labels[i] + ' (marked)')
+            setattr(self._plot_mark_lines[i], 'original_label', self._plot_lines_labels[i])
         self._canvas.draw_idle()
+        self._ignore_scale_change = False
 
     def clear(self):
         self._plot_voltages = [np.empty(0)] * LINES_COUNT
@@ -196,8 +214,16 @@ class Plot:
             line.set_data(np.empty(0), np.empty(0))
         self._plot_lines_labels = ['_*empty*_'] * LINES_COUNT
         if self._legend is not None:
-            self._legend.legend.remove()
+            self._legend.remove()
+            self._legend = None
         self._canvas.draw_idle()
+        if self._legend_figure is not None:
+            self._legend_figure.canvas.draw()
+            self._legend_figure.canvas.setMaximumWidth(0)
+            self._legend_figure.canvas.setMaximumHeight(0)
+            self._legend_figure.canvas.setMinimumWidth(0)
+            self._legend_figure.canvas.setMinimumHeight(0)
+            # self._legend_figure.canvas.setVisible(False)
 
     def load_data(self, filename, _filter):
         if not filename:
@@ -235,16 +261,24 @@ class Plot:
             self._max_voltage = nonemax((self._max_voltage, np.max(self._plot_voltages[-1])))
             self.make_grid((self._min_frequency, self._max_frequency))
             self.draw_data(self._plot_frequencies, self._plot_voltages, (self._min_mark, self._max_mark))
+
             if any(map(lambda l: not l.startswith('_'), self._plot_lines_labels)):
                 if self._legend is not None:
-                    self._legend.legend.remove()
+                    self._legend.remove()
                 labels = []
                 lines = []
                 for i, lbl in enumerate(self._plot_lines_labels):
                     if not lbl.startswith('_'):
                         labels.append(lbl)
                         lines.append(self._plot_mark_lines[i])
-                self._legend = DraggableLegend(self._figure.legend(lines, labels), use_blit=True)
+                self._legend = self._legend_figure.legend(lines, labels, frameon=False, loc='center', facecolor='red')
+                we = self._legend.get_window_extent()
+                self._legend_figure.canvas.setMinimumWidth(we.width)
+                self._legend_figure.canvas.setMaximumWidth(we.width)
+                self._legend_figure.canvas.setMinimumHeight(we.height)
+                self._legend_figure.canvas.setMaximumHeight(we.height)
+                self._legend_figure.canvas.draw()
+                # self._legend_figure.canvas.setVisible(True)
             return self._min_frequency, self._max_frequency, self._min_voltage, self._max_voltage
         return None
 
@@ -303,18 +337,34 @@ class Plot:
             return
         filename_parts = os.path.splitext(filename)
         if 'CSV' in _filter:
-            if filename_parts[1] != '.csv':
+            if filename_parts[1].lower() != '.csv':
                 filename += '.csv'
-            data = np.vstack(data).transpose()
+            if isinstance(data, dict):
+                joined_data = None
+                for key, value in data.items():
+                    if joined_data is None:
+                        joined_data = np.vstack(value).transpose()
+                    else:
+                        joined_data = np.vstack((joined_data, np.vstack(value).transpose()))
+                data = joined_data
+            else:
+                data = np.vstack(data).transpose()
             np.savetxt(filename, data,
                        delimiter=csv_sep,
                        header=csv_header,
                        fmt='%s')
         elif 'XLSX' in _filter:
-            if filename_parts[1] != '.xlsx':
+            if filename_parts[1].lower() != '.xlsx':
                 filename += '.xlsx'
             with pd.ExcelWriter(filename) as writer:
-                data = np.vstack(data).transpose()
-                df = pd.DataFrame(data)
-                df.to_excel(writer, index=False, header=xlsx_header,
-                            sheet_name=sheet_name)
+                if isinstance(data, dict):
+                    for sheet_name in data:
+                        sheet_data = np.vstack(data[sheet_name]).transpose()
+                        df = pd.DataFrame(sheet_data)
+                        df.to_excel(writer, index=False, header=xlsx_header,
+                                    sheet_name=sheet_name)
+                else:
+                    data = np.vstack(data).transpose()
+                    df = pd.DataFrame(data)
+                    df.to_excel(writer, index=False, header=xlsx_header,
+                                sheet_name=sheet_name)
