@@ -272,6 +272,7 @@ class Plot:
                         labels.append(lbl)
                         lines.append(self._plot_mark_lines[i])
                 self._legend = self._legend_figure.legend(lines, labels, frameon=False, loc='center', facecolor='red')
+                self._legend_figure.canvas.draw()
                 we = self._legend.get_window_extent()
                 self._legend_figure.canvas.setMinimumWidth(we.width)
                 self._legend_figure.canvas.setMaximumWidth(we.width)

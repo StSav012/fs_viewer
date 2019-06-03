@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, \
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
+from matplotlib.artist import Artist
 import matplotlib.style as mplstyle
 import mplcursors
 import pyperclip
@@ -152,11 +153,26 @@ class App(QMainWindow):
         self.plot = backend.Plot(figure=self.figure,
                                  canvas=self.canvas,
                                  legend_figure=self.legend_figure)
+        if hasattr(Artist, 'set_in_layout'):
+            annotation_kwargs = dict(
+                annotation_clip=True,
+                in_layout=False,
+                clip_on=True,
+                animated=False,
+            )
+        else:
+            annotation_kwargs = dict(
+                annotation_clip=True,
+                clip_on=True,
+                animated=False,
+            )
         self.plot_trace_cursor = mplcursors.cursor(self.plot.lines,
-                                                   bindings={'left': 'left', 'right': 'right'})
+                                                   bindings={'left': 'left', 'right': 'right'},
+                                                   annotation_kwargs=annotation_kwargs)
         self.plot_trace_cursor.enabled = False
         self.plot_trace_multiple_cursor = mplcursors.cursor(self.plot.lines, multiple=True,
-                                                            bindings={'left': 'left', 'right': 'right'})
+                                                            bindings={'left': 'left', 'right': 'right'},
+                                                            annotation_kwargs=annotation_kwargs)
         self.plot_trace_multiple_cursor.enabled = False
 
         self.setup_ui(self)
