@@ -292,11 +292,23 @@ class NavigationToolbar(NavigationToolbar2QT):
             except (ValueError, OverflowError):
                 pass
             else:
-                artists = [a for a in getattr(event.inaxes, '_mouseover_set')
+                if hasattr(event.inaxes, '_mouseover_set'):
+                    mouseover_set = getattr(event.inaxes, '_mouseover_set')
+                elif hasattr(event.inaxes, 'mouseover_set'):
+                    mouseover_set = getattr(event.inaxes, 'mouseover_set')
+                else:
+                    return
+                artists = [a for a in mouseover_set
                            if a.contains(event)[0] and a.get_visible()]
 
                 if artists:
-                    a = getattr(matplotlib.cbook, '_topmost_artist')(artists)
+                    if hasattr(matplotlib.cbook, '_topmost_artist'):
+                        topmost_artist = getattr(matplotlib.cbook, '_topmost_artist')
+                    elif hasattr(matplotlib.cbook, 'topmost_artist'):
+                        topmost_artist = getattr(matplotlib.cbook, 'topmost_artist')
+                    else:
+                        return
+                    a = topmost_artist(artists)
                     if a is not event.inaxes.patch:
                         data = a.get_cursor_data(event)
                         if data is not None:
