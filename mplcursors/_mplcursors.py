@@ -1,16 +1,9 @@
 from collections import Counter
-from collections.abc import Iterable
 from contextlib import suppress
 import copy
 from functools import partial
-import sys
-import weakref
-from weakref import WeakKeyDictionary
 
-from matplotlib.axes import Axes
 from matplotlib.cbook import CallbackRegistry
-from matplotlib.container import Container
-from matplotlib.figure import Figure
 import numpy as np
 
 from . import _pick_info
@@ -91,8 +84,6 @@ class Cursor:
         See the *annotation_positions* keyword argument to the constructor.
     """
 
-    _keep_alive = WeakKeyDictionary()
-
     def __init__(self,
                  artists,
                  *,
@@ -147,12 +138,7 @@ class Cursor:
             List of positions tried by the annotation positioning algorithm.
         """
 
-        artists = list(artists)
-        # Be careful with GC.
-        self._artists = [weakref.ref(artist) for artist in artists]
-
-        for artist in artists:
-            type(self)._keep_alive.setdefault(artist, set()).add(self)
+        self._artists = artists
 
         self._multiple = multiple
 
@@ -164,14 +150,14 @@ class Cursor:
         self._callbacks = CallbackRegistry()
 
         connect_pairs = [
-            ("key_press_event", self._on_key_press),
-            ("button_press_event", self._mouse_click_handler),
+            ('key_press_event', self._on_key_press),
+            ('button_press_event', self._mouse_click_handler),
             ('pick_event', self._pick_event_handler)
         ]
         self._disconnectors = [
             partial(canvas.mpl_disconnect, canvas.mpl_connect(*pair))
             for pair in connect_pairs
-            for canvas in {artist.figure.canvas for artist in artists}
+            for canvas in {artist.figure.canvas for artist in self._artists}
         ]
 
         if bindings is not None:
@@ -202,7 +188,7 @@ class Cursor:
         """
         # Work around matplotlib/matplotlib#6982: `cla()` does not clear
         # `.axes`.
-        return tuple(filter(_is_alive, (ref() for ref in self._artists)))
+        return tuple(self._artists)
 
     @property
     def enabled(self):
@@ -366,9 +352,6 @@ class Cursor:
             disconnectors()
         for sel in self.selections:
             self.remove_selection(sel)
-        for s in type(self)._keep_alive.values():
-            with suppress(KeyError):
-                s.remove(self)
 
     def _mouse_click_handler(self, event):
         if event.name == "button_press_event" and self._enabled:
@@ -397,9 +380,9 @@ class Cursor:
             return
         # Work around lack of support for twinned axes.
         per_axes_event = {ax: _reassigned_axes_event(event, ax)
-                          for ax in {artist.axes for artist in self.artists}}
+                          for ax in {artist.axes for artist in self._artists}}
         pis = []
-        for artist in self.artists:
+        for artist in self._artists:
             if (artist.axes is None  # Removed or figure-level artist.
                     or event.canvas is not artist.figure.canvas
                     or not artist.axes.contains(event)[0]):  # Cropped by axes.
@@ -450,61 +433,3 @@ class Cursor:
         self._callbacks.process("remove", sel)
         for figure in figures:
             figure.canvas.draw_idle()
-
-
-def cursor(pickables=None, **kwargs):
-    """Create a `Cursor` for a list of artists, containers, and axes.
-
-    Parameters
-    ----------
-
-    pickables : Optional[List[Union[Artist, Container, Axes, Figure]]]
-        All artists and containers in the list or on any of the axes or
-        figures passed in the list are selectable by the constructed `Cursor`.
-        Defaults to all artists and containers on any of the figures that
-        :mod:`~matplotlib.pyplot` is tracking.  Note that the latter will only
-        work when relying on pyplot, not when figures are directly instantiated
-        (e.g., when manually embedding Matplotlib in a GUI toolkit).
-
-    **kwargs
-        Keyword arguments are passed to the `Cursor` constructor.
-    """
-
-    if pickables is None:
-        # Do not import pyplot ourselves to avoid forcing the backend.
-        plt = sys.modules.get("matplotlib.pyplot")
-        pickables = [
-            plt.figure(num) for num in plt.get_fignums()] if plt else []
-    elif isinstance(pickables, Container) or not isinstance(pickables, Iterable):
-        pickables = [pickables]
-
-    def iter_unpack_figures(_pickables):
-        for entry in _pickables:
-            if isinstance(entry, Figure):
-                yield from entry.axes
-            else:
-                yield entry
-
-    def iter_unpack_axes(_pickables):
-        for entry in _pickables:
-            if isinstance(entry, Axes):
-                for _artists in [entry.collections, entry.images, entry.lines,
-                                 entry.patches, entry.texts]:
-                    yield from _artists
-                containers.extend(entry.containers)
-            elif isinstance(entry, Container):
-                containers.append(entry)
-            else:
-                yield entry
-
-    containers = []
-    artists = list(iter_unpack_axes(iter_unpack_figures(pickables)))
-    for container in containers:
-        contained = list(filter(None, container.get_children()))
-        for artist in contained:
-            with suppress(ValueError):
-                artists.remove(artist)
-        if contained:
-            artists.append(container)
-
-    return Cursor(artists, **kwargs)

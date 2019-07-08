@@ -1,55 +1,41 @@
 ﻿#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+# TODO: save and load trace balloons
+
 import sys
 import os
-
-import numpy as np
 
 from PyQt5.QtCore import Qt, QCoreApplication, \
     QSettings, \
     QMetaObject
-from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QMainWindow, QApplication, \
     QWidget, QDesktopWidget, \
     QGridLayout, \
     QGroupBox, QLabel, \
     QCheckBox, QPushButton, \
     QDoubleSpinBox, \
-    QFileDialog, QMessageBox, \
-    QAction
+    QFileDialog, QMessageBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-from matplotlib.artist import Artist
 import matplotlib.style as mplstyle
-import mplcursors
-import pyperclip
 
 import backend
+from backend import NavigationToolbar as NavigationToolbar
 
 mplstyle.use('fast')
 
 MAX_FREQUENCY = 175000.0
-MIN_FREQUENCY = 115000.0
+MIN_FREQUENCY = 118000.0
 MAX_VOLTAGE = 617.0
 MIN_VOLTAGE = -MAX_VOLTAGE
-
-TRACE_AVERAGING_RANGE = 25.
-
-IMAGE_EXT = '.svg'
-
-
-# https://www.reddit.com/r/learnpython/comments/4kjie3/how_to_include_gui_images_with_pyinstaller/d3gjmom
-def resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(getattr(sys, '_MEIPASS'), relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
 
 
 class App(QMainWindow):
     def __init__(self):
         super().__init__(flags=Qt.WindowFlags())
+        self.settings = QSettings("SavSoft", "Fast Sweep Viewer")
+
         self.central_widget = QWidget(self, flags=Qt.WindowFlags())
         self.grid_layout = QGridLayout(self.central_widget)
         self.grid_layout.setColumnStretch(0, 1)
@@ -132,85 +118,30 @@ class App(QMainWindow):
         self.button_mark_min_reset = QPushButton(self.group_mark)
         self.button_mark_max_reset = QPushButton(self.group_mark)
         for b in (self.button_mark_min_reset, self.button_mark_max_reset):
-            b.setIcon(self.load_icon('reset'))
+            b.setIcon(backend.load_icon('reset'))
         self.button_zoom_to_selection = QPushButton(self.group_mark)
 
         # plot
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setFocusPolicy(Qt.ClickFocus)
-        self.plot_toolbar = NavigationToolbar(self.canvas, self)
-        self.plot_open_action = QAction(self.plot_toolbar)
-        self.plot_clear_action = QAction(self.plot_toolbar)
-        self.plot_mark_action = QAction(self.plot_toolbar)
-        self.plot_save_data_action = QAction(self.plot_toolbar)
-        self.plot_trace_action = QAction(self.plot_toolbar)
-        self.plot_trace_multiple_action = QAction(self.plot_toolbar)
-        self.plot_copy_trace_action = QAction(self.plot_toolbar)
-        self.plot_save_trace_action = QAction(self.plot_toolbar)
+        self.plot_toolbar = NavigationToolbar(self.canvas, self, parameters_icon=backend.load_icon('configure'))
         self.legend_figure = Figure(constrained_layout=True, frameon=False)
         self.legend_canvas = FigureCanvas(self.legend_figure)
         self.plot = backend.Plot(figure=self.figure,
-                                 canvas=self.canvas,
-                                 legend_figure=self.legend_figure)
-        if hasattr(Artist, 'set_in_layout'):
-            annotation_kwargs = dict(
-                annotation_clip=True,
-                in_layout=False,
-                clip_on=True,
-                animated=False,
-            )
-        else:
-            annotation_kwargs = dict(
-                annotation_clip=True,
-                clip_on=True,
-                animated=False,
-            )
-        self.plot_trace_cursor = mplcursors.cursor(self.plot.lines,
-                                                   bindings={'left': 'left', 'right': 'right'},
-                                                   annotation_kwargs=annotation_kwargs)
-        self.plot_trace_cursor.enabled = False
-        self.plot_trace_multiple_cursor = mplcursors.cursor(self.plot.lines, multiple=True,
-                                                            bindings={'left': 'left', 'right': 'right'},
-                                                            annotation_kwargs=annotation_kwargs)
-        self.plot_trace_multiple_cursor.enabled = False
+                                 legend_figure=self.legend_figure,
+                                 toolbar=self.plot_toolbar,
+                                 settings=self.settings,
+                                 on_xlim_changed=self.on_xlim_changed,
+                                 on_ylim_changed=self.on_ylim_changed,
+                                 on_data_loaded=self.load_data)
 
         self.setup_ui(self)
 
-        self.settings = QSettings("SavSoft", "Fast Sweep Viewer")
         # prevent config from being re-written while loading
         self._loading = True
         # config
         self.load_config()
-
-        # plot toolbar
-        # TODO: add keyboard shortcuts
-        for a, i in zip([self.plot_open_action, self.plot_clear_action,
-                         self.plot_save_data_action, self.plot_mark_action,
-                         self.plot_trace_action, self.plot_trace_multiple_action,
-                         self.plot_copy_trace_action, self.plot_save_trace_action],
-                        ['open', 'delete',
-                         'savetable', 'measureline',
-                         'selectobject', 'selectmultiple',
-                         'copyselected', 'saveselected']):
-            a.setIcon(self.load_icon(i))
-        self.plot_toolbar.addAction(self.plot_open_action)
-        self.plot_toolbar.addAction(self.plot_clear_action)
-        self.plot_toolbar.addSeparator()
-        self.plot_toolbar.addAction(self.plot_mark_action)
-        self.plot_toolbar.addAction(self.plot_save_data_action)
-        self.plot_toolbar.addSeparator()
-        self.plot_toolbar.addAction(self.plot_trace_action)
-        self.plot_toolbar.addAction(self.plot_trace_multiple_action)
-        self.plot_toolbar.addAction(self.plot_copy_trace_action)
-        self.plot_toolbar.addAction(self.plot_save_trace_action)
-        self.plot_clear_action.setEnabled(False)
-        self.plot_mark_action.setEnabled(False)
-        self.plot_save_data_action.setEnabled(False)
-        self.plot_trace_action.setEnabled(False)
-        self.plot_trace_multiple_action.setEnabled(False)
-        self.plot_copy_trace_action.setEnabled(False)
-        self.plot_save_trace_action.setEnabled(False)
 
         # actions
         self.spin_frequency_min.valueChanged.connect(self.spin_frequency_min_changed)
@@ -225,38 +156,27 @@ class App(QMainWindow):
         self.button_move_x_left_fine.clicked.connect(lambda: self.button_move_x_clicked(-50.))
         self.button_move_x_right_fine.clicked.connect(lambda: self.button_move_x_clicked(50.))
         self.button_move_x_right_coarse.clicked.connect(lambda: self.button_move_x_clicked(500.))
+        self.check_frequency_persists.toggled.connect(self.check_frequency_persists_toggled)
+
         self.spin_voltage_min.valueChanged.connect(self.spin_voltage_min_changed)
         self.spin_voltage_max.valueChanged.connect(self.spin_voltage_max_changed)
         self.button_zoom_y_out_coarse.clicked.connect(lambda: self.button_zoom_y_clicked(1. / 0.5))
         self.button_zoom_y_out_fine.clicked.connect(lambda: self.button_zoom_y_clicked(1. / 0.9))
         self.button_zoom_y_in_fine.clicked.connect(lambda: self.button_zoom_y_clicked(0.9))
         self.button_zoom_y_in_coarse.clicked.connect(lambda: self.button_zoom_y_clicked(0.5))
+        self.check_voltage_persists.toggled.connect(self.check_voltage_persists_toggled)
+
         self.spin_mark_min.valueChanged.connect(self.spin_mark_min_changed)
         self.spin_mark_max.valueChanged.connect(self.spin_mark_max_changed)
         self.button_mark_min_reset.clicked.connect(self.button_mark_min_reset_clicked)
         self.button_mark_max_reset.clicked.connect(self.button_mark_max_reset_clicked)
         self.button_zoom_to_selection.clicked.connect(self.button_zoom_to_selection_clicked)
 
-        self.plot_open_action.triggered.connect(self.load_data)
-        self.plot_clear_action.triggered.connect(self.clear)
-        self.plot_save_data_action.triggered.connect(
-            lambda: self.plot.save_data(*self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")))
-        self.plot_mark_action.toggled.connect(self.plot_mark_action_toggled)
-        self.plot_trace_action.toggled.connect(self.plot_trace_action_toggled)
-        self.plot_trace_multiple_action.toggled.connect(self.plot_trace_multiple_action_toggled)
-        self.plot_copy_trace_action.triggered.connect(self.plot_copy_trace_action_triggered)
-        self.plot_save_trace_action.triggered.connect(self.plot_save_trace_action_triggered)
-
-        # dirty hack: the event doesn't work directly for subplots
         self.mpl_connect_cid = self.canvas.mpl_connect('button_press_event', self.plot_on_click)
 
     def setup_ui(self, main_window):
         main_window.resize(484, 441)
-        main_window.setWindowIcon(self.load_icon('sweep'))
-
-        self.plot_mark_action.setCheckable(True)
-        self.plot_trace_action.setCheckable(True)
-        self.plot_trace_multiple_action.setCheckable(True)
+        main_window.setWindowIcon(backend.load_icon('sweep'))
 
         self.grid_layout_frequency.addWidget(self.label_frequency_min, 1, 0, 1, 2)
         self.grid_layout_frequency.addWidget(self.label_frequency_max, 0, 0, 1, 2)
@@ -321,6 +241,8 @@ class App(QMainWindow):
         _translate = QCoreApplication.translate
         main_window.setWindowTitle(_translate("main_window", "Fast Sweep Viewer"))
 
+        self.plot_toolbar.parameters_title = _translate("plot config window title", "Figure options")
+
         suffix_mhz = ' ' + _translate("main_window", "MHz")
         suffix_mv = ' ' + _translate("main_window", "mV")
 
@@ -368,37 +290,6 @@ class App(QMainWindow):
         self.spin_voltage_max.setSuffix(suffix_mv)
         self.spin_mark_min.setSuffix(suffix_mhz)
         self.spin_mark_max.setSuffix(suffix_mhz)
-
-        self.plot_open_action.setIconText(_translate("plot toolbar action", "Open"))
-        self.plot_open_action.setToolTip(_translate("plot toolbar action", "Load spectrometer data"))
-        self.plot_clear_action.setIconText(_translate("plot toolbar action", "Clear"))
-        self.plot_mark_action.setIconText(_translate("plot toolbar action", "Mark"))
-        self.plot_save_data_action.setIconText(_translate("plot toolbar action", "Save Data"))
-        self.plot_save_data_action.setToolTip(_translate("plot toolbar action", "Export data"))
-        self.plot_trace_action.setIconText(_translate("plot toolbar action", "Trace"))
-        self.plot_trace_multiple_action.setIconText(_translate("plot toolbar action", "Trace Multiple"))
-        self.plot_copy_trace_action.setIconText(_translate("plot toolbar action", "Copy Traced"))
-        self.plot_copy_trace_action.setToolTip(_translate("plot toolbar action", "Copy trace points into clipboard"))
-        self.plot_save_trace_action.setIconText(_translate("plot toolbar action", "Save Traced"))
-        self.plot_save_trace_action.setToolTip(_translate("plot toolbar action", "Save trace points"))
-
-        def annotation_text(sel):
-            x = sel.target[0]
-            y = sel.target[1]
-            line = sel.artist
-            good = np.abs(line.get_xdata() - x) < TRACE_AVERAGING_RANGE
-            average_y = np.mean(line.get_ydata()[good])
-            setattr(sel.target, 'offset', average_y)
-            return (line.original_label + '\n'
-                    + '{:.3f}' + suffix_mhz + '\n'
-                    + '{:.3f}' + suffix_mv + '\n'
-                    + '{:.3f}' + suffix_mv + ' ' + _translate("main_window", "to mean")).format(x, y, y - average_y)
-
-        def cursor_add_action(sel):
-            sel.annotation.set_text(annotation_text(sel))
-
-        self.plot_trace_cursor.connect("add", cursor_add_action)
-        self.plot_trace_multiple_cursor.connect("add", cursor_add_action)
 
     def closeEvent(self, event):
         """ senseless joke in the loop """
@@ -450,6 +341,7 @@ class App(QMainWindow):
         self.spin_frequency_span.setValue(max_freq - min_freq)
         self.spin_frequency_center.setValue(0.5 * (max_freq + min_freq))
         self.plot.set_frequency_range(lower_value=min_freq, upper_value=max_freq)
+        self.check_frequency_persists.setChecked(self.get_config_value('frequency', 'persists', False, bool))
 
         min_voltage = self.get_config_value('voltage', 'lower',
                                             self.spin_voltage_min.minimum(),
@@ -462,6 +354,7 @@ class App(QMainWindow):
         self.spin_voltage_min.setMaximum(max_voltage)
         self.spin_voltage_max.setMinimum(min_voltage)
         self.plot.set_voltage_range(lower_value=min_voltage, upper_value=max_voltage)
+        self.check_voltage_persists.setChecked(self.get_config_value('voltage', 'persists', False, bool))
 
         self._loading = False
         return
@@ -471,7 +364,10 @@ class App(QMainWindow):
             return default
         self.settings.beginGroup(section)
         # print(section, key)
-        v = self.settings.value(key, default, _type)
+        try:
+            v = self.settings.value(key, default, _type)
+        except TypeError:
+            v = default
         self.settings.endGroup()
         return v
 
@@ -483,16 +379,9 @@ class App(QMainWindow):
         self.settings.setValue(key, value)
         self.settings.endGroup()
 
-    @staticmethod
-    def load_icon(filename):
-        icon = QIcon()
-        icon.addPixmap(QPixmap(resource_path(os.path.join('img', filename + IMAGE_EXT))), QIcon.Normal, QIcon.Off)
-        return icon
-
-    def load_data(self):
+    def load_data(self, lims):
         if self._loading:
             return
-        lims = self.plot.load_data(*self.open_file_dialog(_filter="Spectrometer Settings (*.fmd);;All Files (*)"))
         if lims is not None:
             min_freq, max_freq, min_voltage, max_voltage = lims
             self.set_config_value('frequency', 'lower', min_freq)
@@ -526,13 +415,6 @@ class App(QMainWindow):
             self.plot.set_voltage_range(lower_value=self.spin_voltage_min.value(),
                                         upper_value=self.spin_voltage_max.value())
         self.figure.tight_layout()
-        self.plot_clear_action.setEnabled(True)
-        self.plot_mark_action.setEnabled(True)
-        self.plot_save_data_action.setEnabled(True)
-        self.plot_trace_action.setEnabled(True)
-        self.plot_trace_multiple_action.setEnabled(True)
-        self.plot_copy_trace_action.setEnabled(True)
-        self.plot_save_trace_action.setEnabled(True)
 
     def spin_frequency_min_changed(self, new_value):
         if self._loading:
@@ -624,6 +506,11 @@ class App(QMainWindow):
         self.plot.set_frequency_range(upper_value=max_freq, lower_value=min_freq)
         self._loading = False
 
+    def check_frequency_persists_toggled(self, new_value):
+        if self._loading:
+            return
+        self.set_config_value('frequency', 'persists', new_value)
+
     def spin_voltage_min_changed(self, new_value):
         if self._loading:
             return
@@ -661,6 +548,11 @@ class App(QMainWindow):
         self.plot.set_voltage_range(upper_value=max_voltage, lower_value=min_voltage)
         self._loading = False
 
+    def check_voltage_persists_toggled(self, new_value):
+        if self._loading:
+            return
+        self.set_config_value('voltage', 'persists', new_value)
+
     def spin_mark_min_changed(self, new_value):
         if self._loading:
             return
@@ -687,104 +579,14 @@ class App(QMainWindow):
         self.spin_frequency_min.setValue(self.spin_mark_min.value())
         self.spin_frequency_max.setValue(self.spin_mark_max.value())
 
-    def plot_mark_action_toggled(self, new_value):
-        if self.plot_toolbar.mode == 'zoom rect':
-            self.plot_toolbar.zoom()
-        elif self.plot_toolbar.mode == 'pan/zoom':
-            self.plot_toolbar.pan()
-        if new_value:
-            self.plot_trace_action.setChecked(False)
-            self.plot_trace_multiple_action.setChecked(False)
-
-    def plot_trace_action_toggled(self, new_value):
-        if new_value:
-            self.plot_mark_action.setChecked(False)
-            self.plot_trace_multiple_action.setChecked(False)
-            self.canvas.setFocus()
-        if self.plot_toolbar.mode == 'zoom rect':
-            self.plot_toolbar.zoom()
-        elif self.plot_toolbar.mode == 'pan/zoom':
-            self.plot_toolbar.pan()
-        self.plot_trace_cursor.enabled = new_value
-        self.plot_trace_cursor.visible = new_value
-        self.plot_trace_multiple_cursor.enabled = False
-        self.plot_trace_multiple_cursor.visible = False
-
-    def plot_trace_multiple_action_toggled(self, new_value):
-        if new_value:
-            self.plot_mark_action.setChecked(False)
-            self.plot_trace_action.setChecked(False)
-            self.canvas.setFocus()
-        if self.plot_toolbar.mode == 'zoom rect':
-            self.plot_toolbar.zoom()
-        elif self.plot_toolbar.mode == 'pan/zoom':
-            self.plot_toolbar.pan()
-        self.plot_trace_cursor.enabled = False
-        self.plot_trace_cursor.visible = False
-        self.plot_trace_multiple_cursor.enabled = new_value
-        self.plot_trace_multiple_cursor.visible = new_value
-
-    def plot_copy_trace_action_triggered(self):
-        sep = '\t'
-        table = ''
-        selections = []
-        if self.plot_trace_multiple_cursor.enabled:
-            selections = self.plot_trace_multiple_cursor.selections
-        elif self.plot_trace_cursor.enabled:
-            selections = self.plot_trace_cursor.selections
-        for sel in selections:
-            x, y = sel.target.tolist()
-            offset = sel.target.offset
-            table += '{1}{0}{2}{0}{3}{0}"{4}"\n'.format(sep, x, y, y - offset, sel.artist.original_label)
-        if table:
-            pyperclip.copy(table)
-
-    def plot_save_trace_action_triggered(self):
-        selections = []
-        if self.plot_trace_multiple_cursor.enabled:
-            selections = self.plot_trace_multiple_cursor.selections
-        elif self.plot_trace_cursor.enabled:
-            selections = self.plot_trace_cursor.selections
-
-        labels = []
-        for sel in selections:
-            label = sel.artist.original_label
-            if label not in labels:
-                labels.append(label)
-
-        data = dict()
-        for label in labels:
-            picked_x = []
-            picked_y = []
-            picked_dy = []
-            for sel in selections:
-                if sel.artist.original_label != label:
-                    continue
-                x, y = sel.target.tolist()
-                picked_x.append(x)
-                picked_y.append(y)
-                picked_dy.append(y - sel.target.offset)
-            if not picked_x or not picked_y:
-                continue
-            data[label] = (picked_x, picked_y, picked_dy)
-
-        filename, _filter = self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")
-        if filename:
-            sep = '\t'
-            self.plot.save_arbitrary_data(data, filename, _filter,
-                                          csv_header=(sep.join(('frequency', 'voltage', 'voltage_to_mean')) + '\n'
-                                                      + sep.join(('MHz', 'mV', 'mV'))),
-                                          csv_sep=sep,
-                                          xlsx_header=['Frequency [MHz]', 'Voltage [mV]', 'Voltage to Mean [mV]'])
-
     def plot_on_click(self, event):
         if self._loading:
             return
         if event.inaxes is not None:
             if event.dblclick \
-                    and not self.plot_mark_action.isChecked() \
-                    and not self.plot_trace_action.isChecked() \
-                    and not self.plot_trace_multiple_action.isChecked():
+                    and not self.plot.mark_mode \
+                    and not self.plot.trace_mode \
+                    and not self.plot.trace_multiple_mode:
                 min_freq, max_freq, min_voltage, max_voltage = self.plot.on_dblclick(event)
                 self.set_config_value('frequency', 'lower', min_freq)
                 self.set_config_value('frequency', 'upper', max_freq)
@@ -802,31 +604,14 @@ class App(QMainWindow):
                 self.spin_voltage_min.setMaximum(max_voltage)
                 self.spin_voltage_max.setMinimum(min_voltage)
                 self._loading = False
-            elif self.plot_mark_action.isChecked():
-                if self.plot_toolbar.mode:
-                    self.plot_mark_action.setChecked(False)
+            elif self.plot.mark_mode:
+                if self.plot.mode:
+                    self.plot.actions_off()
                 else:
                     if event.button == 1:
                         self.spin_mark_min.setValue(event.xdata)
                     else:
                         self.spin_mark_max.setValue(event.xdata)
-
-    def clear(self):
-        self.plot.clear()
-        for sel in self.plot_trace_multiple_cursor.selections:
-            self.plot_trace_multiple_cursor.remove_selection(sel)
-        for sel in self.plot_trace_cursor.selections:
-            self.plot_trace_cursor.remove_selection(sel)
-        self.plot_mark_action.setChecked(False)
-        self.plot_trace_action.setChecked(False)
-        self.plot_trace_multiple_action.setChecked(False)
-        self.plot_clear_action.setEnabled(False)
-        self.plot_mark_action.setEnabled(False)
-        self.plot_save_data_action.setEnabled(False)
-        self.plot_trace_action.setEnabled(False)
-        self.plot_trace_multiple_action.setEnabled(False)
-        self.plot_copy_trace_action.setEnabled(False)
-        self.plot_save_trace_action.setEnabled(False)
 
     def open_file_dialog(self, _filter=''):
         directory = self.get_config_value('open', 'location', '', str)
@@ -838,18 +623,35 @@ class App(QMainWindow):
         self.set_config_value('open', 'location', os.path.split(filename)[0])
         return filename, _filter
 
-    def save_file_dialog(self, _filter=''):
-        directory = self.get_config_value('save', 'location', '', str)
-        initial_filter = self.get_config_value('save', 'filter', '', str)
-        # native dialog misbehaves when running inside snap but Qt dialog is tortoise-like in NT
-        options = QFileDialog.DontUseNativeDialog if os.name != 'nt' else QFileDialog.DontUseSheet
-        filename, _filter = QFileDialog.getSaveFileName(filter=_filter,
-                                                        directory=directory,
-                                                        initialFilter=initial_filter,
-                                                        options=options)
-        self.set_config_value('save', 'location', os.path.split(filename)[0])
-        self.set_config_value('save', 'filter', _filter)
-        return filename, _filter
+    def on_xlim_changed(self, xlim):
+        min_freq, max_freq = xlim
+        self.set_config_value('frequency', 'lower', min_freq)
+        self.set_config_value('frequency', 'upper', max_freq)
+        self._loading = True
+        self.spin_frequency_min.setValue(min_freq)
+        self.spin_frequency_max.setValue(max_freq)
+        self.spin_frequency_span.setValue(max_freq - min_freq)
+        self.spin_frequency_center.setValue(0.5 * (max_freq + min_freq))
+        self.spin_frequency_min.setMaximum(max_freq)
+        self.spin_frequency_max.setMinimum(min_freq)
+        self.spin_mark_max.setMinimum(max(max_freq, self.spin_mark_max.minimum()))
+        self.spin_mark_max.setMinimum(max(max_freq, self.spin_mark_max.minimum()))
+        self._loading = False
+        self.plot.set_frequency_range(lower_value=self.spin_frequency_min.value(),
+                                      upper_value=self.spin_frequency_max.value())
+
+    def on_ylim_changed(self, ylim):
+        min_voltage, max_voltage = ylim
+        self.set_config_value('voltage', 'lower', min_voltage)
+        self.set_config_value('voltage', 'upper', max_voltage)
+        self._loading = True
+        self.spin_voltage_min.setValue(min_voltage)
+        self.spin_voltage_max.setValue(max_voltage)
+        self.spin_voltage_min.setMaximum(max_voltage)
+        self.spin_voltage_max.setMinimum(min_voltage)
+        self._loading = False
+        self.plot.set_voltage_range(lower_value=self.spin_voltage_min.value(),
+                                    upper_value=self.spin_voltage_max.value())
 
 
 if __name__ == '__main__':

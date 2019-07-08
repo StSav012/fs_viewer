@@ -9,7 +9,6 @@ import inspect
 from inspect import Signature
 import re
 
-from matplotlib.lines import Line2D
 import numpy as np
 
 
@@ -158,7 +157,7 @@ def _compute_projection_pick(artist, path, xy):
         target = AttrArray(artist.axes.transData.inverted().transform_point(projs[argmin]))
         target.index = (
                 (argmin + dot[argmin] / ls[argmin])
-                / (path._interpolation_steps / tpath._interpolation_steps))
+                / (getattr(path, '_interpolation_steps') / getattr(tpath, '_interpolation_steps')))
         return Selection(artist, target, dmin, None, None)
 
 
@@ -172,39 +171,24 @@ def compute_pick(artist, event):
     xy = np.array([event.x, event.y])
     data_xy = artist.get_xydata()
     sels = []
-    # If markers are visible, find the closest vertex.
-    if artist.get_marker() not in ["None", "none", " ", "", None]:
-        ds = np.hypot(*(xy - artist.get_transform().transform(data_xy)).T)
-        try:
-            argmin = np.nanargmin(ds)
-            dmin = ds[argmin]
-        except (ValueError, IndexError):
-            # numpy 1.7.0's `nanargmin([nan])` returns nan, so
-            # `ds[argmin]` raises IndexError.  In later versions of numpy,
-            # `nanargmin([nan])` raises ValueError (the release notes for 1.8.0
-            # are incorrect on this topic).
-            pass
-        else:
-            # More precise than transforming back.
-            target = with_attrs(artist.get_xydata()[argmin], index=argmin)
-            sels.append(Selection(artist, target, dmin, None, None))
-    # If lines are visible, find the closest projection.
-    if artist.get_linestyle() not in ["None", "none", " ", "", None] and len(artist.get_xydata()) > 1:
-        sel = _compute_projection_pick(artist, artist.get_path(), xy)
-        if sel is not None:
-            sel.target.index = {
-                "_draw_lines": lambda _, index: index,
-                "_draw_steps_pre": Index.pre_index,
-                "_draw_steps_mid": Index.mid_index,
-                "_draw_steps_post": Index.post_index
-            }[
-                Line2D.drawStyles[artist.get_drawstyle()]
-            ](
-                len(data_xy), sel.target.index
-            )
-            sels.append(sel)
-    sel = min(sels, key=lambda _sel: _sel.dist, default=None)
-    return sel if sel and sel.dist < artist.get_pickradius() else None
+    ds = np.hypot(*(xy - artist.get_transform().transform(data_xy)).T)
+    try:
+        argmin = np.nanargmin(ds)
+        dmin = ds[argmin]
+    except (ValueError, IndexError):
+        # numpy 1.7.0's `nanargmin([nan])` returns nan, so
+        # `ds[argmin]` raises IndexError.  In later versions of numpy,
+        # `nanargmin([nan])` raises ValueError (the release notes for 1.8.0
+        # are incorrect on this topic).
+        pass
+    else:
+        # More precise than transforming back.
+        target = with_attrs(artist.get_xydata()[argmin], index=argmin)
+        sels.append(Selection(artist, target, dmin, None, None))
+    if not sels:
+        return None
+    sel = min(sels, key=lambda _sel: _sel.dist)
+    return sel if sel.dist < artist.get_pickradius() else None
 
 
 def _call_with_selection(func):
@@ -271,7 +255,7 @@ def _move_within_points(sel, xys, *, key):
         else:
             return sel
         target = with_attrs(xys[new_idx], index=new_idx)
-        sel = sel._replace(target=target, dist=0)
+        sel = getattr(sel, '_replace')(target=target, dist=0)
         if np.isfinite(target).all():
             return sel
 
