@@ -252,9 +252,7 @@ class NavigationToolbar(NavigationToolbar2QT):
         if self.coordinates:
             self.locLabel = QLabel("", self)
             self.locLabel.setAlignment(Qt.AlignRight | Qt.AlignTop)
-            self.locLabel.setSizePolicy(
-                QSizePolicy(QSizePolicy.Expanding,
-                            QSizePolicy.Ignored))
+            self.locLabel.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored))
             label_action = self.addWidget(self.locLabel)
             label_action.setVisible(True)
 
@@ -284,6 +282,28 @@ class NavigationToolbar(NavigationToolbar2QT):
         dia.setWindowIcon(self.parent.windowIcon())
         dia.setWindowTitle(self.parent.windowTitle())
         dia.exec_()
+
+    def mouse_move(self, event):
+        self._set_cursor(event)
+
+        if event.inaxes and event.inaxes.get_navigate():
+            try:
+                s = event.inaxes.format_coord(event.xdata, event.ydata)
+            except (ValueError, OverflowError):
+                pass
+            else:
+                artists = [a for a in getattr(event.inaxes, '_mouseover_set')
+                           if a.contains(event)[0] and a.get_visible()]
+
+                if artists:
+                    a = getattr(matplotlib.cbook, '_topmost_artist')(artists)
+                    if a is not event.inaxes.patch:
+                        data = a.get_cursor_data(event)
+                        if data is not None:
+                            data_str = a.format_cursor_data(data)
+                            if data_str is not None:
+                                s += ' ' + data_str
+                self.set_message(s)
 
 
 class Plot:
