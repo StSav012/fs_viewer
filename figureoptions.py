@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # based on matplotlib.backends.qt_editor.figureoptions
 
 # Copyright © 2009 Pierre Raybaut
@@ -19,22 +20,6 @@ import matplotlib.backends.qt_editor as qt_editor
 def get_icon(name):
     basedir = os.path.join(matplotlib.rcParams['datapath'], 'images')
     return QIcon(os.path.join(basedir, name))
-
-
-LINESTYLES = {'-': 'Solid',
-              '--': 'Dashed',
-              '-.': 'DashDot',
-              ':': 'Dotted',
-              'None': 'None',
-              }
-
-DRAWSTYLES = {
-    'default': 'Default',
-    'steps-pre': 'Steps (Pre)', 'steps': 'Steps (Pre)',
-    'steps-mid': 'Steps (Mid)',
-    'steps-post': 'Steps (Post)'}
-
-MARKERS = markers.MarkerStyle.markers
 
 
 def figure_edit(axes, parent=None, *,
@@ -87,6 +72,14 @@ def figure_edit(axes, parent=None, *,
                        key=lambda short_and_name: short_and_name[1]))
 
     _translate = QCoreApplication.translate
+
+    linestyles = {'-': _translate("plot line options", 'Solid'),
+                  '--': _translate("plot line options", 'Dashed'),
+                  '-.': _translate("plot line options", 'DashDot'),
+                  ':': _translate("plot line options", 'Dotted'),
+                  'None': _translate("plot line options", 'None'),
+                  }
+
     for label, (line, index) in linedict.items():
         color = mcolors.to_hex(
             mcolors.to_rgba(line.get_color(), line.get_alpha()),
@@ -99,13 +92,12 @@ def figure_edit(axes, parent=None, *,
             keep_alpha=True)
         curvedata = [
             (None, '<b>' + _translate("plot line options", 'Line') + '</b>'),
-            (_translate("plot line options", 'Line style'), prepare_data(LINESTYLES, line.get_linestyle())),
-            (_translate("plot line options", 'Draw style'), prepare_data(DRAWSTYLES, line.get_drawstyle())),
+            (_translate("plot line options", 'Line style'), prepare_data(linestyles, line.get_linestyle())),
             (_translate("plot line options", 'Width'), line.get_linewidth()),
             (_translate("plot line options", 'Color (RGBA)'), color),
             sep,
             (None, '<b>' + _translate("plot line options", 'Marker') + '</b>'),
-            (_translate("plot line options", 'Style'), prepare_data(MARKERS, line.get_marker())),
+            (_translate("plot line options", 'Style'), prepare_data(markers.MarkerStyle.markers, line.get_marker())),
             (_translate("plot line options", 'Size'), line.get_markersize()),
             (_translate("plot line options", 'Face color (RGBA)'), fc),
             (_translate("plot line options", 'Edge color (RGBA)'), ec)
@@ -118,7 +110,7 @@ def figure_edit(axes, parent=None, *,
         if parent is None or not hasattr(parent, 'parent') \
                 or parent.parent is None or not hasattr(parent.parent, 'set_config_value'):
             return
-        for name, value in zip(('linestyle', 'drawstyle', 'linewidth', 'color', 'marker', 'markersize',
+        for name, value in zip(('linestyle', 'linewidth', 'color', 'marker', 'markersize',
                                 'markerfacecolor', 'markeredgecolor'), _curve):
             parent.parent.set_config_value('line {}'.format(_index), name, value)
 
@@ -138,11 +130,10 @@ def figure_edit(axes, parent=None, *,
         # Set / Curves
         for _label, curve in zip(linedict, _curves):
             _line, _index = linedict[_label]
-            (linestyle, drawstyle, linewidth, _color, marker, markersize,
+            (linestyle, linewidth, _color, marker, markersize,
              markerfacecolor, markeredgecolor) = curve
             save_settings(_index, curve)
             _line.set_linestyle(linestyle)
-            _line.set_drawstyle(drawstyle)
             _line.set_linewidth(linewidth)
             rgba = mcolors.to_rgba(_color)
             _line.set_alpha(None)
@@ -191,7 +182,7 @@ def load_settings(axes, parent=None):
         return ok
 
     for index, line in enumerate(axes.get_lines()):
-        for name in ('linestyle', 'drawstyle', 'linewidth', 'color', 'marker', 'markersize',
+        for name in ('linestyle', 'linewidth', 'color', 'marker', 'markersize',
                      'markerfacecolor', 'markeredgecolor'):
             value = parent.parent.get_config_value('line {}'.format(index), name, '???', str)
             if value != '???':

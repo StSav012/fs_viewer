@@ -2,13 +2,15 @@
 # -*- coding: utf-8 -*-
 
 # TODO: save and load trace balloons
+# TODO: add a button to clear trace balloons without removing plots
 
 import sys
 import os
 
 from PyQt5.QtCore import Qt, QCoreApplication, \
     QSettings, \
-    QMetaObject
+    QMetaObject, \
+    QTranslator, QLocale, QLibraryInfo
 from PyQt5.QtWidgets import QMainWindow, QApplication, \
     QWidget, QDesktopWidget, \
     QGridLayout, \
@@ -273,7 +275,7 @@ class App(QMainWindow):
         self.button_zoom_y_in_fine.setText(_translate("main_window", "+10%"))
         self.button_zoom_y_in_coarse.setText(_translate("main_window", "+50%"))
 
-        self.group_mark.setTitle(_translate("main_window", "Mark"))
+        self.group_mark.setTitle(_translate("main_window", "Selection"))
         self.label_mark_min.setText(_translate("main_window", "Minimum") + ':')
         self.label_mark_max.setText(_translate("main_window", "Maximum") + ':')
         if self.button_mark_min_reset.icon().isNull():
@@ -293,10 +295,11 @@ class App(QMainWindow):
 
     def closeEvent(self, event):
         """ senseless joke in the loop """
+        _translate = QCoreApplication.translate
         close_code = QMessageBox.No
         while close_code == QMessageBox.No:
             close = QMessageBox()
-            close.setText("Are you sure?")
+            close.setText(_translate("main_window", "Are you sure?"))
             close.setIcon(QMessageBox.Question)
             close.setWindowIcon(self.windowIcon())
             close.setWindowTitle(self.windowTitle())
@@ -656,6 +659,19 @@ class App(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+
+    qt_translator = QTranslator()
+    qt_translator.load("qt_" + QLocale.system().bcp47Name(),
+                       QLibraryInfo.location(QLibraryInfo.TranslationsPath))
+    app.installTranslator(qt_translator)
+    qtbase_translator = QTranslator()
+    qtbase_translator.load("qtbase_" + QLocale.system().bcp47Name(),
+                           QLibraryInfo.location(QLibraryInfo.TranslationsPath))
+    app.installTranslator(qtbase_translator)
+    my_translator = QTranslator()
+    my_translator.load(QLocale.system().bcp47Name(), backend.resource_path('translations'))
+    app.installTranslator(my_translator)
+
     window = App()
     window.show()
     app.exec_()

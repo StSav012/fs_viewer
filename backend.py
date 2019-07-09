@@ -87,10 +87,10 @@ class SubplotToolQt(QDialog):
         box = QGroupBox(_translate("plot borders settings", "Borders"))
         left.addWidget(box)
         inner = QFormLayout(box)
-        self._attrs = [_translate("plot borders settings", "top"),
-                       _translate("plot borders settings", "bottom"),
-                       _translate("plot borders settings", "left"),
-                       _translate("plot borders settings", "right")]
+        self._attrs = ["top",
+                       "bottom",
+                       "left",
+                       "right"]
         self._actions = [_translate("plot borders settings", "Tight layout"),
                          _translate("plot borders settings", "Reset"),
                          _translate("plot borders settings", "Close")]
@@ -101,7 +101,7 @@ class SubplotToolQt(QDialog):
             widget.setDecimals(3)
             widget.setSingleStep(.005)
             widget.setKeyboardTracking(False)
-            inner.addRow(side, widget)
+            inner.addRow(_translate("plot borders settings", side), widget)
         left.addStretch(1)
 
         for action in self._actions:
@@ -457,30 +457,33 @@ class Plot:
         self._toolbar.open_action.setIconText(_translate("plot toolbar action", "Open"))
         self._toolbar.open_action.setToolTip(_translate("plot toolbar action", "Load spectrometer data"))
         self._toolbar.clear_action.setIconText(_translate("plot toolbar action", "Clear"))
-        self._toolbar.clear_action.setToolTip(_translate("plot toolbar action", "Clear"))
+        self._toolbar.clear_action.setToolTip(_translate("plot toolbar action", "Clear lines and markers"))
         self._toolbar.zoom_action.setIconText(_translate("plot toolbar action", "Zoom"))
-        self._toolbar.zoom_action.setToolTip(_translate("plot toolbar action", "Zoom to rectangle"))
+        self._toolbar.zoom_action.setToolTip(_translate("plot toolbar action",
+                                                        "Zoom to rectangle with left mouse, unzoom with right"))
         self._toolbar.pan_action.setIconText(_translate("plot toolbar action", "Pan"))
         self._toolbar.pan_action.setToolTip(_translate("plot toolbar action",
                                                        "Pan axes with left mouse, zoom with right"))
-        self._toolbar.mark_action.setIconText(_translate("plot toolbar action", "Mark"))
-        self._toolbar.mark_action.setToolTip(_translate("plot toolbar action", "Mark"))
+        self._toolbar.mark_action.setIconText(_translate("plot toolbar action", "Select"))
+        self._toolbar.mark_action.setToolTip(_translate("plot toolbar action",
+                                                        "Select a frequency range to zoom or export"))
         self._toolbar.save_data_action.setIconText(_translate("plot toolbar action", "Save Data"))
-        self._toolbar.save_data_action.setToolTip(_translate("plot toolbar action", "Export data"))
+        self._toolbar.save_data_action.setToolTip(_translate("plot toolbar action", "Export the selected data"))
         self._toolbar.save_figure_action.setIconText(_translate("plot toolbar action", "Save Figure"))
-        self._toolbar.save_figure_action.setToolTip(_translate("plot toolbar action", "Export figure"))
-        self._toolbar.trace_action.setIconText(_translate("plot toolbar action", "Trace"))
-        self._toolbar.trace_multiple_action.setIconText(_translate("plot toolbar action", "Trace Multiple"))
-        self._toolbar.copy_trace_action.setIconText(_translate("plot toolbar action", "Copy Traced"))
+        self._toolbar.save_figure_action.setToolTip(_translate("plot toolbar action", "Save the plot as an image"))
+        self._toolbar.trace_action.setIconText(_translate("plot toolbar action", "Mark"))
+        self._toolbar.trace_action.setToolTip(_translate("plot toolbar action", "Mark a data point"))
+        self._toolbar.trace_multiple_action.setIconText(_translate("plot toolbar action", "Mark Multiple"))
+        self._toolbar.trace_multiple_action.setToolTip(_translate("plot toolbar action", "Mark several data points"))
+        self._toolbar.copy_trace_action.setIconText(_translate("plot toolbar action", "Copy Marked"))
         self._toolbar.copy_trace_action.setToolTip(_translate("plot toolbar action",
-                                                              "Copy trace points into clipboard"))
-        self._toolbar.save_trace_action.setIconText(_translate("plot toolbar action", "Save Traced"))
-        self._toolbar.save_trace_action.setToolTip(_translate("plot toolbar action", "Save trace points"))
+                                                              "Copy marked points values into clipboard"))
+        self._toolbar.save_trace_action.setIconText(_translate("plot toolbar action", "Save Marked"))
+        self._toolbar.save_trace_action.setToolTip(_translate("plot toolbar action", "Save marked points values"))
         self._toolbar.subplots_action.setIconText(_translate("plot toolbar action", "Position and Size"))
-        self._toolbar.subplots_action.setToolTip(_translate("plot toolbar action", "Position and size"))
+        self._toolbar.subplots_action.setToolTip(_translate("plot toolbar action", "Edit plot position and size"))
         self._toolbar.configure_action.setIconText(_translate("plot toolbar action", "Configure"))
-        self._toolbar.configure_action.setToolTip(_translate("plot toolbar action",
-                                                             "Edit axis, curve and image parameters"))
+        self._toolbar.configure_action.setToolTip(_translate("plot toolbar action", "Edit curve parameters"))
 
         def annotation_text(sel):
             x = sel.target[0]
