@@ -11,10 +11,10 @@
 import os.path
 
 import matplotlib
-from matplotlib import colors as mcolors, markers
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import QCoreApplication
 import matplotlib.backends.qt_editor as qt_editor
+from PyQt5.QtCore import QCoreApplication
+from PyQt5.QtGui import QIcon
+from matplotlib import colors as mcolors, markers
 
 
 def get_icon(name):

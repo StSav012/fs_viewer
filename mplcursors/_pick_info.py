@@ -2,12 +2,12 @@
 # have a `format_coord`-like method); PolyCollection (picking is not well
 # defined).
 
-from collections import ChainMap, namedtuple
 import copy
 import functools
 import inspect
-from inspect import Signature
 import re
+from collections import ChainMap, namedtuple
+from inspect import Signature
 
 import numpy as np
 

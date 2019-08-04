@@ -1,22 +1,20 @@
 ﻿# -*- coding: utf-8 -*-
 
 import os
-import numpy as np
-import pandas as pd
 import sys
 
 import matplotlib
+import numpy as np
+import pandas as pd
+import pyperclip
+from PyQt5.QtCore import QCoreApplication, QSettings, Qt, QSize
+from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtWidgets import QAction, QFileDialog, QLabel, QSizePolicy, QMessageBox, \
+    QGroupBox, QFormLayout, QDoubleSpinBox, QPushButton, QHBoxLayout, QVBoxLayout, QDialog
 from matplotlib.artist import Artist
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+
 import figureoptions
-
-from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtCore import QCoreApplication, QSettings, Qt, QSize
-from PyQt5.QtWidgets import QAction, QFileDialog, QLabel, QSizePolicy, QMessageBox,\
-    QGroupBox, QFormLayout, QDoubleSpinBox, QPushButton, QHBoxLayout, QVBoxLayout, QDialog
-
-import pyperclip
-
 import mplcursors
 
 FRAME_SIZE = 50.

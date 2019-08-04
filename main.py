@@ -4,9 +4,10 @@
 # TODO: save and load trace balloons
 # TODO: add a button to clear trace balloons without removing plots
 
-import sys
 import os
+import sys
 
+import matplotlib.style as mplstyle
 from PyQt5.QtCore import Qt, QCoreApplication, \
     QSettings, \
     QMetaObject, \
@@ -20,7 +21,6 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, \
     QFileDialog, QMessageBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-import matplotlib.style as mplstyle
 
 import backend
 from backend import NavigationToolbar as NavigationToolbar

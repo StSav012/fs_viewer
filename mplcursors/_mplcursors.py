@@ -1,13 +1,12 @@
+import copy
 from collections import Counter
 from contextlib import suppress
-import copy
 from functools import partial
 
-from matplotlib.cbook import CallbackRegistry
 import numpy as np
+from matplotlib.cbook import CallbackRegistry
 
 from . import _pick_info
-
 
 _default_bindings = dict(
     select=1,
