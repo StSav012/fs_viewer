@@ -38,6 +38,9 @@ class App(QMainWindow):
         super().__init__(flags=Qt.WindowFlags())
         self.settings = QSettings("SavSoft", "Fast Sweep Viewer")
 
+        # prevent config from being re-written while loading
+        self._loading = True
+
         self.central_widget = QWidget(self, flags=Qt.WindowFlags())
         self.grid_layout = QGridLayout(self.central_widget)
         self.grid_layout.setColumnStretch(0, 1)
@@ -140,8 +143,6 @@ class App(QMainWindow):
 
         self.setup_ui(self)
 
-        # prevent config from being re-written while loading
-        self._loading = True
         # config
         self.load_config()
 
@@ -627,6 +628,8 @@ class App(QMainWindow):
         return filename, _filter
 
     def on_xlim_changed(self, xlim):
+        if not hasattr(self, 'plot'):
+            return
         min_freq, max_freq = xlim
         self.set_config_value('frequency', 'lower', min_freq)
         self.set_config_value('frequency', 'upper', max_freq)
@@ -644,6 +647,8 @@ class App(QMainWindow):
                                       upper_value=self.spin_frequency_max.value())
 
     def on_ylim_changed(self, ylim):
+        if not hasattr(self, 'plot'):
+            return
         min_voltage, max_voltage = ylim
         self.set_config_value('voltage', 'lower', min_voltage)
         self.set_config_value('voltage', 'upper', max_voltage)

@@ -282,7 +282,9 @@ class NavigationToolbar(NavigationToolbar2QT):
         dia.exec_()
 
     def mouse_move(self, event):
-        self._set_cursor(event)
+        # changed function name in matplotlib 3 or near that
+        set_cursor = getattr(self, '_update_cursor' if hasattr(self, '_update_cursor') else '_set_cursor')
+        set_cursor(event)
 
         if event.inaxes and event.inaxes.get_navigate():
             try:
@@ -425,19 +427,20 @@ class Plot:
         self._min_mark = None
         self._max_mark = None
 
-        self._figure.callbacks.connect('xlim_changed', self.on_xlim_changed)
-        self._figure.callbacks.connect('ylim_changed', self.on_ylim_changed)
+        self._ignore_scale_change = False
+
         self._axvlines = [self._figure.axvline(np.nan, color='grey', linewidth=0.5,
                                                label='_ vertical line {}'.format(i + 1))
                           for i in range(GRID_LINES_COUNT)]
 
-        self._ignore_scale_change = False
-
-        self.retranslate_ui()
-
         self.on_xlim_changed_callback = kwargs.pop('on_xlim_changed', None)
         self.on_ylim_changed_callback = kwargs.pop('on_ylim_changed', None)
         self.on_data_loaded_callback = kwargs.pop('on_data_loaded', None)
+
+        self._figure.callbacks.connect('xlim_changed', self.on_xlim_changed)
+        self._figure.callbacks.connect('ylim_changed', self.on_ylim_changed)
+
+        self.retranslate_ui()
 
         self._toolbar.load_parameters()
         self.load_settings()
