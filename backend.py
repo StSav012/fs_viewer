@@ -6,9 +6,8 @@ import sys
 import matplotlib
 import numpy as np
 import pandas as pd
-import pyperclip
 from PyQt5.QtCore import QCoreApplication, QSettings, Qt, QSize
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QGuiApplication
 from PyQt5.QtWidgets import QAction, QFileDialog, QLabel, QSizePolicy, QMessageBox, \
     QGroupBox, QFormLayout, QDoubleSpinBox, QPushButton, QHBoxLayout, QVBoxLayout, QDialog
 from matplotlib.artist import Artist
@@ -807,7 +806,7 @@ class Plot:
             offset = sel.target.offset
             table += '{1}{0}{2}{0}{3}{0}"{4}"'.format(sep, x, y, y - offset, sel.annotation.original_label) + os.linesep
         if table:
-            pyperclip.copy(table)
+            QGuiApplication.clipboard().setText(table)
 
     def plot_save_trace_action_triggered(self):
         selections = []
