@@ -205,7 +205,7 @@ class NavigationToolbar(NavigationToolbar2QT):
                          'copyselected', 'saveselected',
                          'size', 'configure']):
             a.setIcon(load_icon(i))
-        # TODO: add the conventional buttons, too
+
         self.addAction(self.open_action)
         self.addAction(self.clear_action)
         self.addSeparator()
@@ -632,8 +632,8 @@ class Plot:
         self._canvas.draw_idle()
         if self._legend_figure is not None:
             self._legend_figure.canvas.draw()
-            self._legend_figure.canvas.setMaximumWidth(0)
-            self._legend_figure.canvas.setMaximumHeight(0)
+            self._legend_figure.canvas.setMaximumWidth(1)
+            self._legend_figure.canvas.setMaximumHeight(1)
             self._legend_figure.canvas.setMinimumWidth(0)
             self._legend_figure.canvas.setMinimumHeight(0)
             # self._legend_figure.canvas.setVisible(False)
