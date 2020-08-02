@@ -262,8 +262,8 @@ class NavigationToolbar(NavigationToolbar2QT):
 
     def _update_buttons_checked(self):
         # sync button checkstates to match active mode
-        self.pan_action.setChecked(self._active == 'PAN')
-        self.zoom_action.setChecked(self._active == 'ZOOM')
+        self.pan_action.setChecked(self.mode.name == 'PAN')
+        self.zoom_action.setChecked(self.mode.name == 'ZOOM')
 
     def load_parameters(self):
         if not self.canvas.figure.get_axes():
@@ -715,7 +715,8 @@ class Plot:
                     self._legend_figure.canvas.draw()
                     # self._legend_figure.canvas.setVisible(True)
                     for _legline in self._legend.get_lines():
-                        _legline.set_picker(5)
+                        _legline.set_pickradius(5)
+                        _legline.set_picker(True)
 
             self._toolbar.clear_action.setEnabled(True)
             self._toolbar.zoom_action.setEnabled(True)
@@ -805,7 +806,7 @@ class Plot:
         for sel in selections:
             x, y = sel.target.tolist()
             offset = sel.target.offset
-            table += '{1}{0}{2}{0}{3}{0}"{4}"'.format(sep, x, y, y - offset, sel.annotation.original_label) + os.linesep
+            table += f'{x}{sep}{y}{sep}{y - offset}{sep}"{sel.annotation.original_label}"' + os.linesep
         if table:
             QGuiApplication.clipboard().setText(table)
 
@@ -838,7 +839,7 @@ class Plot:
                 continue
             data[label] = (picked_x, picked_y, picked_dy)
 
-        filename, _filter = self.save_file_dialog(_filter="CSV (*.csv);;XLSX (*.xlsx)")
+        filename, _filter = self.save_file_dialog(_filter='CSV (*.csv);;XLSX (*.xlsx)')
         if filename:
             sep = '\t'
             self.save_arbitrary_data(data, filename, _filter,
@@ -900,12 +901,10 @@ class Plot:
         filetypes = self._canvas.get_supported_filetypes_grouped()
         sorted_filetypes = sorted(filetypes.items())
 
-        filters = []
-        for name, exts in sorted_filetypes:
-            exts_list = " ".join(['*.%s' % ext for ext in exts])
-            _filter = '%s (%s)' % (name, exts_list)
-            filters.append(_filter)
-        filters = ';;'.join(filters)
+        filters = ';;'.join([
+            f'{name} ({" ".join([("*." + ext) for ext in exts])})'
+            for name, exts in sorted_filetypes
+        ])
 
         fname, _filter = self.save_file_dialog(_filter=filters)
         if fname:
