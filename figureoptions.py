@@ -168,8 +168,9 @@ def figure_edit(axes, parent=None, *,
 
 
 def load_settings(axes, parent=None):
-    if parent is None or not hasattr(parent, 'parent') \
-            or parent.parent is None or not hasattr(parent.parent, 'get_config_value'):
+    if parent is None \
+            or not hasattr(parent, 'canvas') or not hasattr(parent.canvas, 'parent') \
+            or parent.canvas.parent is None or not hasattr(parent.canvas.parent, 'get_config_value'):
         return
 
     def isnumber(string):

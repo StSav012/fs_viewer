@@ -161,13 +161,11 @@ class SubplotToolQt(QDialog):
 
 class NavigationToolbar(NavigationToolbar2QT):
     def __init__(self, canvas, parent, coordinates=True, *,
-                 parameters_title="Figure options", parameters_icon=None):
+                 parameters_title='Figure options', parameters_icon=None):
+        NavigationToolbar2QT.toolitems = []
         NavigationToolbar2QT.__init__(self, canvas, parent, coordinates)
         self.parameters_title = parameters_title
         self.parameters_icon = parameters_icon
-
-    def _init_toolbar(self):
-        self.basedir = os.path.join(matplotlib.rcParams['datapath'], 'images')
 
         self.open_action = QAction(self)
         self.clear_action = QAction(self)
@@ -258,6 +256,9 @@ class NavigationToolbar(NavigationToolbar2QT):
         # not using HiDPI icons otherwise they look worse than before.
         self.setIconSize(QSize(24, 24))
         self.layout().setSpacing(12)
+
+    def _init_toolbar(self):
+        pass
 
     def _update_buttons_checked(self):
         # sync button checkstates to match active mode
