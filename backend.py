@@ -262,8 +262,12 @@ class NavigationToolbar(NavigationToolbar2QT):
 
     def _update_buttons_checked(self):
         # sync button checkstates to match active mode
-        self.pan_action.setChecked(self.mode.name == 'PAN')
-        self.zoom_action.setChecked(self.mode.name == 'ZOOM')
+        if isinstance(self.mode, str):
+            self.pan_action.setChecked(self._active == 'PAN')
+            self.zoom_action.setChecked(self._active == 'ZOOM')
+        else:
+            self.pan_action.setChecked(self.mode.name == 'PAN')
+            self.zoom_action.setChecked(self.mode.name == 'ZOOM')
 
     def load_parameters(self):
         if not self.canvas.figure.get_axes():
