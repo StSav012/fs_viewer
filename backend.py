@@ -262,7 +262,7 @@ class NavigationToolbar(NavigationToolbar2QT):
 
     def _update_buttons_checked(self):
         # sync button checkstates to match active mode
-        if isinstance(self.mode, str):
+        if isinstance(self.mode, str):  # matplotlib 3.2 → 3.3
             self.pan_action.setChecked(self._active == 'PAN')
             self.zoom_action.setChecked(self._active == 'ZOOM')
         else:
