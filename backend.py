@@ -2,16 +2,21 @@
 
 import os
 import sys
+from typing import List, Union
 
-import matplotlib
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import QCoreApplication, QSettings, Qt, QSize
-from PyQt5.QtGui import QIcon, QPixmap, QGuiApplication
-from PyQt5.QtWidgets import QAction, QFileDialog, QLabel, QSizePolicy, QMessageBox, \
-    QGroupBox, QFormLayout, QDoubleSpinBox, QPushButton, QHBoxLayout, QVBoxLayout, QDialog
+from PyQt5.QtCore import QCoreApplication, QSettings, QSize, Qt
+from PyQt5.QtGui import QGuiApplication, QIcon, QPixmap
+from PyQt5.QtWidgets import QAction, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, \
+    QLabel, QMessageBox, QPushButton, QSizePolicy, QVBoxLayout
+from matplotlib import cbook
 from matplotlib.artist import Artist
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+from matplotlib.axes import Axes
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
+from matplotlib.figure import Figure
+from matplotlib.legend import Legend
+from matplotlib.lines import Line2D
 
 import figureoptions
 import mplcursors
@@ -306,10 +311,10 @@ class NavigationToolbar(NavigationToolbar2QT):
                            if a.contains(event)[0] and a.get_visible()]
 
                 if artists:
-                    if hasattr(matplotlib.cbook, '_topmost_artist'):
-                        topmost_artist = getattr(matplotlib.cbook, '_topmost_artist')
-                    elif hasattr(matplotlib.cbook, 'topmost_artist'):
-                        topmost_artist = getattr(matplotlib.cbook, 'topmost_artist')
+                    if hasattr(cbook, '_topmost_artist'):
+                        topmost_artist = getattr(cbook, '_topmost_artist')
+                    elif hasattr(cbook, 'topmost_artist'):
+                        topmost_artist = getattr(cbook, 'topmost_artist')
                     else:
                         return
                     a = topmost_artist(artists)
@@ -323,6 +328,26 @@ class NavigationToolbar(NavigationToolbar2QT):
 
 
 class Plot:
+    if sys.version_info > (3, 4):
+        settings: QSettings
+        _canvas: FigureCanvasQTAgg
+        _legend_figure: Union[None, Figure]
+        _figure: Axes
+        _toolbar: NavigationToolbar
+        _legend: Union[None, Legend]
+        _plot_lines: List[Line2D]
+        _plot_mark_lines: List[Line2D]
+        _plot_lines_labels: List[str]
+        _plot_frequencies: List[np.ndarray]
+        _plot_voltages: List[np.ndarray]
+        _min_frequency: Union[None, float]
+        _max_frequency: Union[None, float]
+        _min_voltage: Union[None, float]
+        _max_voltage: Union[None, float]
+        _min_mark: Union[None, float]
+        _max_mark: Union[None, float]
+        _ignore_scale_change: bool
+
     def __init__(self, figure, toolbar, *, legend_figure=None, settings=None, **kwargs):
         if settings is None:
             self.settings = QSettings("SavSoft", "Fast Sweep Viewer")
@@ -444,12 +469,12 @@ class Plot:
         self._figure.callbacks.connect('xlim_changed', self.on_xlim_changed)
         self._figure.callbacks.connect('ylim_changed', self.on_ylim_changed)
 
-        self.retranslate_ui()
+        self.translate_ui()
 
         self._toolbar.load_parameters()
         self.load_settings()
 
-    def retranslate_ui(self):
+    def translate_ui(self):
         _translate = QCoreApplication.translate
 
         suffix_mhz = ' ' + _translate("main_window", "MHz")
