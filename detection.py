@@ -70,7 +70,7 @@ def correlation(model_y, another_x: np.ndarray, another_y: np.ndarray) -> np.nda
 
 
 def positions(data_x, data_y) -> np.ndarray:
-    if not data_x.size or not data_y.size:
+    if data_x.size < 2 or data_y.size < 2:
         # nothing to do
         return np.empty(0)
     # correlate the signal with itself reversed around each point: lines are symmetrical, steps are asymmetrical
@@ -95,7 +95,7 @@ def positions(data_x, data_y) -> np.ndarray:
     not_nan_core: np.ndarray = np.abs(core[~np.isnan(core)])
     not_nan_anti_core: np.ndarray = np.abs(anti_core[~np.isnan(anti_core)])
     match: np.ndarray = np.array((not_nan_core > 3. * np.std(not_nan_core))
-                                 # & (not_nan_anti_core > 3. * np.std(not_nan_anti_core))
+                                 # & (not_nan_anti_core < 3. * np.std(not_nan_anti_core))
                                  & (not_nan_anti_core < not_nan_core))
     match = np.concatenate((np.full(int(np.floor((data_x.shape[0] - match.shape[0]) / 2)), False),
                             match,
@@ -105,8 +105,13 @@ def positions(data_x, data_y) -> np.ndarray:
     #         match[f] |= \
     #             (core[f] > 3 * np.std(fragment(core, data_x, data_x[f], 1.5 * LINE_WIDTH))
     #              and anti_core[f] > 3 * np.std(fragment(anti_core, data_x, data_x[f], 1.5 * LINE_WIDTH)))
+    for f in range(data_x.shape[0]):
+        if data_x[f] - data_x[0] > 1.5 * LINE_WIDTH and data_x[-1] - data_x[f] > 1.5 * LINE_WIDTH:
+            match[f] &= \
+                anti_core[f] < 3 * np.std(fragment(anti_core, data_x, data_x[f], 1.5 * LINE_WIDTH))
     match = remove_spikes(match)
-    match = ndimage.binary_dilation(match, iterations=4)
+    match = ndimage.binary_dilation(match, iterations=5)
+    match = ndimage.binary_erosion(match, iterations=2)
     match = remove_spikes(match)
     islands: np.ndarray = np.argwhere(np.diff(match)).reshape(-1, 2)
     peaks: np.ndarray = np.array([i[0] + np.argmax(data_y[i[0]:i[1]]) for i in islands])
@@ -115,13 +120,21 @@ def positions(data_x, data_y) -> np.ndarray:
 
 if __name__ == '__main__':
     def main():
-        data = np.loadtxt('lines.csv')
+        # data = np.loadtxt('lines.csv')
 
-        plt.plot(data[..., 0], data[..., 1], label='data')
+        f = np.arange(118000.0, 118150.0, 0.1)
+        v = np.random.normal(size=(f.size,))
+        model = np.loadtxt('averaged fs signal.csv')
+        data = np.column_stack((f, correlation(model, f, v)))
+        plt.plot(f, v, label='initial')
+
+        plt.plot(data[..., 0], data[..., 1], label='correlation')
         found_lines = positions(data[..., 0], data[..., 1])
-        plt.plot(data[found_lines, 0], data[found_lines, 1], ls='', marker='o')
-        plt.legend()
-        plt.show()
+        if found_lines.size:
+            plt.plot(data[found_lines, 0], data[found_lines, 1], ls='', marker='o')
+            plt.tight_layout()
+            plt.legend()
+            plt.show()
 
 
     main()
