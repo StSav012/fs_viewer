@@ -8,17 +8,9 @@ import os
 import sys
 
 import matplotlib.style as mplstyle
-from PyQt5.QtCore import Qt, QCoreApplication, \
-    QSettings, \
-    QMetaObject, \
-    QTranslator, QLocale, QLibraryInfo
-from PyQt5.QtWidgets import QMainWindow, QApplication, \
-    QWidget, QDesktopWidget, \
-    QGridLayout, \
-    QGroupBox, QLabel, \
-    QCheckBox, QPushButton, \
-    QDoubleSpinBox, \
-    QFileDialog, QMessageBox
+from PyQt5.QtCore import QCoreApplication, QLibraryInfo, QLocale, QSettings, QTranslator, Qt
+from PyQt5.QtWidgets import QApplication, QCheckBox, QDesktopWidget, QDoubleSpinBox, QFileDialog, QGridLayout, \
+    QGroupBox, QLabel, QMainWindow, QMessageBox, QPushButton, QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
@@ -126,6 +118,14 @@ class App(QMainWindow):
             b.setIcon(backend.load_icon('reset'))
         self.button_zoom_to_selection = QPushButton(self.group_mark)
 
+        # Find Lines box
+        self.group_find_lines = QGroupBox(self.central_widget)
+        self.grid_layout_find_lines = QGridLayout(self.group_find_lines)
+        self.button_find_lines = QPushButton(self.group_find_lines)
+        self.button_clear_lines = QPushButton(self.group_find_lines)
+        self.button_prev_line = QPushButton(self.group_find_lines)
+        self.button_next_line = QPushButton(self.group_find_lines)
+
         # plot
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
@@ -141,7 +141,7 @@ class App(QMainWindow):
                                  on_ylim_changed=self.on_ylim_changed,
                                  on_data_loaded=self.load_data)
 
-        self.setup_ui(self)
+        self.setup_ui()
 
         # config
         self.load_config()
@@ -175,11 +175,16 @@ class App(QMainWindow):
         self.button_mark_max_reset.clicked.connect(self.button_mark_max_reset_clicked)
         self.button_zoom_to_selection.clicked.connect(self.button_zoom_to_selection_clicked)
 
+        self.button_find_lines.clicked.connect(self.plot.find_lines)
+        self.button_clear_lines.clicked.connect(self.plot.clear_lines)
+        self.button_prev_line.clicked.connect(self.prev_found_line)
+        self.button_next_line.clicked.connect(self.next_found_line)
+
         self.mpl_connect_cid = self.canvas.mpl_connect('button_press_event', self.plot_on_click)
 
-    def setup_ui(self, main_window):
-        main_window.resize(484, 441)
-        main_window.setWindowIcon(backend.load_icon('sweep'))
+    def setup_ui(self):
+        self.resize(484, 441)
+        self.setWindowIcon(backend.load_icon('sweep'))
 
         self.grid_layout_frequency.addWidget(self.label_frequency_min, 1, 0, 1, 2)
         self.grid_layout_frequency.addWidget(self.label_frequency_max, 0, 0, 1, 2)
@@ -220,6 +225,11 @@ class App(QMainWindow):
         self.grid_layout_mark.addWidget(self.button_mark_max_reset, 0, 2)
         self.grid_layout_mark.addWidget(self.button_zoom_to_selection, 2, 0, 1, 3)
 
+        self.grid_layout_find_lines.addWidget(self.button_find_lines, 0, 0, 1, 2)
+        self.grid_layout_find_lines.addWidget(self.button_clear_lines, 1, 0, 1, 2)
+        self.grid_layout_find_lines.addWidget(self.button_prev_line, 2, 0)
+        self.grid_layout_find_lines.addWidget(self.button_next_line, 2, 1)
+
         _value_label_interaction_flags = (Qt.LinksAccessibleByKeyboard
                                           | Qt.LinksAccessibleByMouse
                                           | Qt.TextBrowserInteraction
@@ -229,20 +239,20 @@ class App(QMainWindow):
         self.grid_layout.addWidget(self.group_frequency, 2, 1)
         self.grid_layout.addWidget(self.group_voltage, 3, 1)
         self.grid_layout.addWidget(self.group_mark, 4, 1)
+        self.grid_layout.addWidget(self.group_find_lines, 5, 1)
 
         self.grid_layout.addWidget(self.plot_toolbar, 0, 0, 1, 2)
-        self.grid_layout.addWidget(self.canvas, 1, 0, 4, 1)
+        self.grid_layout.addWidget(self.canvas, 1, 0, 5, 1)
         self.grid_layout.addWidget(self.legend_canvas, 1, 1)
 
         self.setCentralWidget(self.central_widget)
 
-        self.retranslate_ui(main_window)
-        main_window.adjustSize()
-        QMetaObject().connectSlotsByName(main_window)
+        self.translate_ui()
+        self.adjustSize()
 
-    def retranslate_ui(self, main_window):
+    def translate_ui(self):
         _translate = QCoreApplication.translate
-        main_window.setWindowTitle(_translate("main_window", "Fast Sweep Viewer"))
+        self.setWindowTitle(_translate("main_window", "Fast Sweep Viewer"))
 
         self.plot_toolbar.parameters_title = _translate("plot config window title", "Figure options")
 
@@ -284,6 +294,14 @@ class App(QMainWindow):
         if self.button_mark_max_reset.icon().isNull():
             self.button_mark_max_reset.setText(_translate("main_window", "Reset"))
         self.button_zoom_to_selection.setText(_translate("main_window", "Zoom to Selection"))
+
+        self.group_find_lines.setTitle(_translate("main_window", "Find Lines"))
+        self.group_find_lines.setToolTip(_translate("main_window",
+                                                    "Try to detect lines automatically"))
+        self.button_find_lines.setText(_translate("main_window", "Find Lines"))
+        self.button_clear_lines.setText(_translate("main_window", "Clear Lines"))
+        self.button_prev_line.setText(_translate("main_window", "Previous Line"))
+        self.button_next_line.setText(_translate("main_window", "Next Line"))
 
         self.spin_frequency_min.setSuffix(suffix_mhz)
         self.spin_frequency_max.setSuffix(suffix_mhz)
@@ -411,8 +429,8 @@ class App(QMainWindow):
             else:
                 self.spin_voltage_min.setMaximum(max(max_voltage, self.spin_voltage_min.value()))
                 self.spin_voltage_max.setMinimum(min(min_voltage, self.spin_voltage_max.value()))
-            self.spin_mark_max.setMinimum(max(max_freq, self.spin_mark_max.minimum()))
-            self.spin_mark_max.setMinimum(max(max_freq, self.spin_mark_max.minimum()))
+            self.spin_mark_min.setMinimum(min(min_freq, self.spin_mark_min.minimum()))
+            self.spin_mark_max.setMaximum(max(max_freq, self.spin_mark_max.maximum()))
             self._loading = False
             self.plot.set_frequency_range(lower_value=self.spin_frequency_min.value(),
                                           upper_value=self.spin_frequency_max.value())
@@ -583,6 +601,12 @@ class App(QMainWindow):
         self.spin_frequency_min.setValue(self.spin_mark_min.value())
         self.spin_frequency_max.setValue(self.spin_mark_max.value())
 
+    def prev_found_line(self):
+        self.spin_frequency_center.setValue(self.plot.prev_found_line(self.spin_frequency_center.value()))
+
+    def next_found_line(self):
+        self.spin_frequency_center.setValue(self.plot.next_found_line(self.spin_frequency_center.value()))
+
     def plot_on_click(self, event):
         if self._loading:
             return
@@ -640,8 +664,8 @@ class App(QMainWindow):
         self.spin_frequency_center.setValue(0.5 * (max_freq + min_freq))
         self.spin_frequency_min.setMaximum(max_freq)
         self.spin_frequency_max.setMinimum(min_freq)
-        self.spin_mark_max.setMinimum(max(max_freq, self.spin_mark_max.minimum()))
-        self.spin_mark_max.setMinimum(max(max_freq, self.spin_mark_max.minimum()))
+        self.spin_mark_min.setMinimum(min(min_freq, self.spin_mark_min.minimum()))
+        self.spin_mark_max.setMaximum(max(max_freq, self.spin_mark_max.maximum()))
         self._loading = False
         self.plot.set_frequency_range(lower_value=self.spin_frequency_min.value(),
                                       upper_value=self.spin_frequency_max.value())

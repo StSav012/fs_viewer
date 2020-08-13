@@ -2,7 +2,7 @@
 
 import os
 import sys
-from typing import List, Union
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,7 @@ from matplotlib.lines import Line2D
 
 import figureoptions
 import mplcursors
+from detection import correlation, positions
 
 FRAME_SIZE = 50.
 LINES_COUNT = 2
@@ -256,7 +257,7 @@ class NavigationToolbar(NavigationToolbar2QT):
             label_action = self.addWidget(self.locLabel)
             label_action.setVisible(True)
 
-        # Esthetic adjustments - we need to set these explicitly in PyQt5
+        # Aesthetic adjustments - we need to set these explicitly in PyQt5
         # otherwise the layout looks different - but we don't want to set it if
         # not using HiDPI icons otherwise they look worse than before.
         self.setIconSize(QSize(24, 24))
@@ -267,7 +268,7 @@ class NavigationToolbar(NavigationToolbar2QT):
 
     def _update_buttons_checked(self):
         # sync button checkstates to match active mode
-        if isinstance(self.mode, str):  # matplotlib 3.2 → 3.3
+        if hasattr(self, '_active'):  # matplotlib 3.2 → 3.3
             self.pan_action.setChecked(self._active == 'PAN')
             self.zoom_action.setChecked(self._active == 'ZOOM')
         else:
@@ -331,21 +332,21 @@ class Plot:
     if sys.version_info > (3, 4):
         settings: QSettings
         _canvas: FigureCanvasQTAgg
-        _legend_figure: Union[None, Figure]
+        _legend_figure: Optional[Figure]
         _figure: Axes
         _toolbar: NavigationToolbar
-        _legend: Union[None, Legend]
+        _legend: Optional[Legend]
         _plot_lines: List[Line2D]
         _plot_mark_lines: List[Line2D]
         _plot_lines_labels: List[str]
         _plot_frequencies: List[np.ndarray]
         _plot_voltages: List[np.ndarray]
-        _min_frequency: Union[None, float]
-        _max_frequency: Union[None, float]
-        _min_voltage: Union[None, float]
-        _max_voltage: Union[None, float]
-        _min_mark: Union[None, float]
-        _max_mark: Union[None, float]
+        _min_frequency: Optional[float]
+        _max_frequency: Optional[float]
+        _min_voltage: Optional[float]
+        _max_voltage: Optional[float]
+        _min_mark: Optional[float]
+        _max_mark: Optional[float]
         _ignore_scale_change: bool
 
     def __init__(self, figure, toolbar, *, legend_figure=None, settings=None, **kwargs):
@@ -473,6 +474,16 @@ class Plot:
 
         self._toolbar.load_parameters()
         self.load_settings()
+
+        try:
+            self.model_signal: np.ndarray = np.loadtxt('averaged fs signal.csv')
+        except (OSError, BlockingIOError):
+            self.model_signal: np.ndarray = np.empty(0)
+        self.found_lines: List[Line2D] = [self._figure.plot(np.empty(0),
+                                                            ls='', marker='o',
+                                                            label='_*automatically_found_lines*_ {}'.format(i + 1),
+                                                            animated=False)[0]
+                                          for i in range(LINES_COUNT)]
 
     def translate_ui(self):
         _translate = QCoreApplication.translate
@@ -609,11 +620,11 @@ class Plot:
     def set_mark(self, lower_value=None, upper_value=None):
         self._min_mark = lower_value
         self._max_mark = upper_value
-        self.draw_data(self._plot_frequencies, self._plot_voltages, (lower_value, upper_value))
+        self.draw_data((lower_value, upper_value))
 
-    def draw_data(self, xs, ys, marks):
+    def draw_data(self, marks):
         self._ignore_scale_change = True
-        for i, (x, y) in enumerate(zip(xs, ys)):
+        for i, (x, y) in enumerate(zip(self._plot_frequencies, self._plot_voltages)):
             left_x = np.empty(0)
             left_y = np.empty(0)
             middle_x = x
@@ -648,6 +659,71 @@ class Plot:
         self._canvas.draw_idle()
         self._ignore_scale_change = False
 
+    def find_lines(self):
+        if self.model_signal.size < 2:
+            return
+
+        from scipy import interpolate
+
+        self._ignore_scale_change = True
+        for i, (x, y) in enumerate(zip(self._plot_frequencies, self._plot_voltages)):
+            if x.size < 2 or y.size < 2:
+                continue
+            # re-scale the signal to the actual frequency mesh
+            x_model: np.ndarray = np.arange(self.model_signal.size, dtype=x.dtype) * 0.1
+            f = interpolate.interp1d(x_model, self.model_signal, kind=2)
+            x_model_new: np.ndarray = np.arange(x_model[0], x_model[-1], x[1] - x[0])
+            y_model_new: np.ndarray = f(x_model_new)
+            match = positions(x, correlation(y_model_new, x, y))
+            if match.size:
+                self.found_lines[i].set_data(x[match], y[match])
+            else:
+                self.found_lines[i].set_data(np.empty(0), np.empty(0))
+        self._canvas.draw_idle()
+        self._ignore_scale_change = False
+
+    def prev_found_line(self, init_frequency: float) -> float:
+        prev_line_freq: np.ndarray = np.full(len(self.found_lines), init_frequency)
+        for index, line in enumerate(self.found_lines):
+            line_data: np.ndarray = line.get_xdata()
+            i: int = np.searchsorted(line_data, init_frequency, side='right') - 2
+            if 0 <= i < line_data.size and line_data[i] != init_frequency:
+                prev_line_freq[index] = line_data[i]
+            else:
+                prev_line_freq[index] = np.nan
+        prev_line_freq = prev_line_freq[~np.isnan(prev_line_freq)]
+        if prev_line_freq.size:
+            return prev_line_freq[np.argmin(init_frequency - prev_line_freq)]
+        else:
+            return init_frequency
+
+    def next_found_line(self, init_frequency: float) -> float:
+        next_line_freq: np.ndarray = np.full(len(self.found_lines), init_frequency)
+        for index, line in enumerate(self.found_lines):
+            line_data: np.ndarray = line.get_xdata()
+            i: int = np.searchsorted(line_data, init_frequency, side='left') + 1
+            if i < line_data.size and line_data[i] != init_frequency:
+                next_line_freq[index] = line_data[i]
+            else:
+                next_line_freq[index] = np.nan
+        next_line_freq = next_line_freq[~np.isnan(next_line_freq)]
+        if next_line_freq.size:
+            return next_line_freq[np.argmin(next_line_freq - init_frequency)]
+        else:
+            return init_frequency
+
+    def clear_lines(self):
+        for line in self.found_lines:
+            line.set_data(np.empty(0), np.empty(0))
+        self._canvas.draw_idle()
+
+    def clear_selections(self):
+        for sel in self.plot_trace_multiple_cursor.selections:
+            self.plot_trace_multiple_cursor.remove_selection(sel)
+        for sel in self.plot_trace_cursor.selections:
+            self.plot_trace_cursor.remove_selection(sel)
+        self._canvas.draw_idle()
+
     def clear(self):
         self._plot_voltages = [np.empty(0)] * LINES_COUNT
         self._plot_frequencies = [np.empty(0)] * LINES_COUNT
@@ -656,6 +732,7 @@ class Plot:
         for line in self._plot_mark_lines:
             line.set_data(np.empty(0), np.empty(0))
         self._plot_lines_labels = ['_*empty*_'] * LINES_COUNT
+        self.clear_lines()
         if self._legend is not None:
             self._legend.remove()
             self._legend = None
@@ -667,10 +744,7 @@ class Plot:
             self._legend_figure.canvas.setMinimumWidth(0)
             self._legend_figure.canvas.setMinimumHeight(0)
             # self._legend_figure.canvas.setVisible(False)
-        for sel in self.plot_trace_multiple_cursor.selections:
-            self.plot_trace_multiple_cursor.remove_selection(sel)
-        for sel in self.plot_trace_cursor.selections:
-            self.plot_trace_cursor.remove_selection(sel)
+        self.clear_selections()
         self._toolbar.zoom_action.setChecked(False)
         self._toolbar.pan_action.setChecked(False)
         self._toolbar.mark_action.setChecked(False)
@@ -721,7 +795,7 @@ class Plot:
             self._max_frequency = nonemax((_max_frequency, self._max_frequency))
             self._min_voltage = nonemin((self._min_voltage, np.min(self._plot_voltages[-1])))
             self._max_voltage = nonemax((self._max_voltage, np.max(self._plot_voltages[-1])))
-            self.draw_data(self._plot_frequencies, self._plot_voltages, (self._min_mark, self._max_mark))
+            self.draw_data((self._min_mark, self._max_mark))
 
             if any(map(lambda l: not l.startswith('_'), self._plot_lines_labels)):
                 if self._legend is not None:
