@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
+from typing import Final
 
 import numpy as np
-from scipy import ndimage
 
 
-LINE_WIDTH = 2.6
+LINE_WIDTH: Final[float] = 2.6
 
 
 def remove_spikes(sequence: np.ndarray, iterations: int = 1) -> np.ndarray:
+    from scipy import ndimage
+
     sequence = ndimage.binary_dilation(sequence, iterations=iterations)
     sequence = ndimage.binary_erosion(sequence, iterations=iterations + 1)
     sequence = ndimage.binary_dilation(sequence, iterations=1)
@@ -17,11 +19,11 @@ def remove_spikes(sequence: np.ndarray, iterations: int = 1) -> np.ndarray:
 def correlation(model_y, another_x: np.ndarray, another_y: np.ndarray) -> np.ndarray:
     from scipy.signal import butter, lfilter
 
-    def butter_bandpass_filter(data, low_cut, high_cut, order=5):
+    def butter_bandpass_filter(data: np.ndarray, low_cut: float, high_cut: float, order: int = 5):
         def butter_bandpass():
-            nyq = 0.5 * fs
-            low = low_cut / nyq
-            high = high_cut / nyq
+            nyq: float = 0.5 * fs
+            low: float = low_cut / nyq
+            high: float = high_cut / nyq
             if low > 0. and high < fs:
                 return butter(order, [low, high], btype='bandpass')
             if low > 0. and high >= fs:
@@ -34,8 +36,9 @@ def correlation(model_y, another_x: np.ndarray, another_y: np.ndarray) -> np.nda
 
     if another_y.size:
         fs: float = 1.0 / (another_x[1] - another_x[0])
-        another_y_filtered = butter_bandpass_filter(another_y, low_cut=0.005 * fs, high_cut=np.inf,
-                                                    order=5)
+        another_y_filtered: np.ndarray = butter_bandpass_filter(another_y,
+                                                                low_cut=0.005 * fs, high_cut=np.inf,
+                                                                order=5)
         _corr: np.ndarray = np.correlate(another_y_filtered, model_y, 'same')
         _corr -= np.mean(_corr)
         _corr /= np.std(_corr)
