@@ -2,12 +2,11 @@
 # -*- coding: utf-8 -*-
 
 # TODO: save and load trace balloons
-# TODO: add a button to clear trace balloons without removing plots
 
 import os
 import sys
 
-import matplotlib.style as mplstyle
+import matplotlib.style
 from PyQt5.QtCore import QCoreApplication, QLibraryInfo, QLocale, QSettings, QTranslator, Qt
 from PyQt5.QtWidgets import QApplication, QCheckBox, QDesktopWidget, QDoubleSpinBox, QFileDialog, QGridLayout, \
     QGroupBox, QLabel, QMainWindow, QMessageBox, QPushButton, QWidget
@@ -17,7 +16,7 @@ from matplotlib.figure import Figure
 import backend
 from backend import NavigationToolbar as NavigationToolbar
 
-mplstyle.use('fast')
+matplotlib.style.use('fast')
 
 MAX_FREQUENCY = 175000.0
 MIN_FREQUENCY = 118000.0
@@ -121,6 +120,10 @@ class App(QMainWindow):
         # Find Lines box
         self.group_find_lines = QGroupBox(self.central_widget)
         self.grid_layout_find_lines = QGridLayout(self.group_find_lines)
+        self.label_threshold = QLabel(self.group_find_lines)
+        self.spin_threshold = QDoubleSpinBox(self.group_find_lines)
+        self.spin_threshold.setMinimum(1.0)
+        self.spin_threshold.setMaximum(1000.0)
         self.button_find_lines = QPushButton(self.group_find_lines)
         self.button_clear_lines = QPushButton(self.group_find_lines)
         self.button_prev_line = QPushButton(self.group_find_lines)
@@ -175,7 +178,9 @@ class App(QMainWindow):
         self.button_mark_max_reset.clicked.connect(self.button_mark_max_reset_clicked)
         self.button_zoom_to_selection.clicked.connect(self.button_zoom_to_selection_clicked)
 
-        self.button_find_lines.clicked.connect(self.plot.find_lines)
+        self.spin_threshold.valueChanged.connect(lambda new_value:
+                                                 self.set_config_value('lineSearch', 'threshold', new_value))
+        self.button_find_lines.clicked.connect(lambda: self.plot.find_lines(self.spin_threshold.value()))
         self.button_clear_lines.clicked.connect(self.plot.clear_lines)
         self.button_prev_line.clicked.connect(self.prev_found_line)
         self.button_next_line.clicked.connect(self.next_found_line)
@@ -225,10 +230,12 @@ class App(QMainWindow):
         self.grid_layout_mark.addWidget(self.button_mark_max_reset, 0, 2)
         self.grid_layout_mark.addWidget(self.button_zoom_to_selection, 2, 0, 1, 3)
 
-        self.grid_layout_find_lines.addWidget(self.button_find_lines, 0, 0, 1, 2)
-        self.grid_layout_find_lines.addWidget(self.button_clear_lines, 1, 0, 1, 2)
-        self.grid_layout_find_lines.addWidget(self.button_prev_line, 2, 0)
-        self.grid_layout_find_lines.addWidget(self.button_next_line, 2, 1)
+        self.grid_layout_find_lines.addWidget(self.label_threshold, 0, 0)
+        self.grid_layout_find_lines.addWidget(self.spin_threshold, 0, 1)
+        self.grid_layout_find_lines.addWidget(self.button_find_lines, 1, 0, 1, 2)
+        self.grid_layout_find_lines.addWidget(self.button_clear_lines, 2, 0, 1, 2)
+        self.grid_layout_find_lines.addWidget(self.button_prev_line, 3, 0)
+        self.grid_layout_find_lines.addWidget(self.button_next_line, 3, 1)
 
         _value_label_interaction_flags = (Qt.LinksAccessibleByKeyboard
                                           | Qt.LinksAccessibleByMouse
@@ -252,56 +259,57 @@ class App(QMainWindow):
 
     def translate_ui(self):
         _translate = QCoreApplication.translate
-        self.setWindowTitle(_translate("main_window", "Fast Sweep Viewer"))
+        self.setWindowTitle(_translate('main window', 'Fast Sweep Viewer'))
 
-        self.plot_toolbar.parameters_title = _translate("plot config window title", "Figure options")
+        self.plot_toolbar.parameters_title = _translate('plot config window title', 'Figure options')
 
-        suffix_mhz = ' ' + _translate("main_window", "MHz")
-        suffix_mv = ' ' + _translate("main_window", "mV")
+        suffix_mhz = ' ' + _translate('unit', 'MHz')
+        suffix_mv = ' ' + _translate('unit', 'mV')
 
-        self.group_frequency.setTitle(_translate("main_window", "Frequency"))
-        self.label_frequency_min.setText(_translate("main_window", "Minimum") + ':')
-        self.label_frequency_max.setText(_translate("main_window", "Maximum") + ':')
-        self.label_frequency_center.setText(_translate("main_window", "Center") + ':')
-        self.label_frequency_span.setText(_translate("main_window", "Span") + ':')
-        self.check_frequency_persists.setText(_translate("main_window", "Keep frequency range"))
+        self.group_frequency.setTitle(_translate('main window', 'Frequency'))
+        self.label_frequency_min.setText(_translate('main window', 'Minimum') + ':')
+        self.label_frequency_max.setText(_translate('main window', 'Maximum') + ':')
+        self.label_frequency_center.setText(_translate('main window', 'Center') + ':')
+        self.label_frequency_span.setText(_translate('main window', 'Span') + ':')
+        self.check_frequency_persists.setText(_translate('main window', 'Keep frequency range'))
 
-        self.button_zoom_x_out_coarse.setText(_translate("main_window", "−50%"))
-        self.button_zoom_x_out_fine.setText(_translate("main_window", "−10%"))
-        self.button_zoom_x_in_fine.setText(_translate("main_window", "+10%"))
-        self.button_zoom_x_in_coarse.setText(_translate("main_window", "+50%"))
+        self.button_zoom_x_out_coarse.setText(_translate('main window', '−50%'))
+        self.button_zoom_x_out_fine.setText(_translate('main window', '−10%'))
+        self.button_zoom_x_in_fine.setText(_translate('main window', '+10%'))
+        self.button_zoom_x_in_coarse.setText(_translate('main window', '+50%'))
 
-        self.button_move_x_left_coarse.setText(_translate("main_window", "−500") + suffix_mhz)
-        self.button_move_x_left_fine.setText(_translate("main_window", "−50") + suffix_mhz)
-        self.button_move_x_right_fine.setText(_translate("main_window", "+50") + suffix_mhz)
-        self.button_move_x_right_coarse.setText(_translate("main_window", "+500") + suffix_mhz)
+        self.button_move_x_left_coarse.setText(_translate('main window', '−500') + suffix_mhz)
+        self.button_move_x_left_fine.setText(_translate('main window', '−50') + suffix_mhz)
+        self.button_move_x_right_fine.setText(_translate('main window', '+50') + suffix_mhz)
+        self.button_move_x_right_coarse.setText(_translate('main window', '+500') + suffix_mhz)
 
-        self.group_voltage.setTitle(_translate("main_window", "Voltage"))
-        self.label_voltage_min.setText(_translate("main_window", "Minimum") + ':')
-        self.label_voltage_max.setText(_translate("main_window", "Maximum") + ':')
-        self.check_voltage_persists.setText(_translate("main_window", "Keep voltage range"))
+        self.group_voltage.setTitle(_translate('main window', 'Voltage'))
+        self.label_voltage_min.setText(_translate('main window', 'Minimum') + ':')
+        self.label_voltage_max.setText(_translate('main window', 'Maximum') + ':')
+        self.check_voltage_persists.setText(_translate('main window', 'Keep voltage range'))
 
-        self.button_zoom_y_out_coarse.setText(_translate("main_window", "−50%"))
-        self.button_zoom_y_out_fine.setText(_translate("main_window", "−10%"))
-        self.button_zoom_y_in_fine.setText(_translate("main_window", "+10%"))
-        self.button_zoom_y_in_coarse.setText(_translate("main_window", "+50%"))
+        self.button_zoom_y_out_coarse.setText(_translate('main window', '−50%'))
+        self.button_zoom_y_out_fine.setText(_translate('main window', '−10%'))
+        self.button_zoom_y_in_fine.setText(_translate('main window', '+10%'))
+        self.button_zoom_y_in_coarse.setText(_translate('main window', '+50%'))
 
-        self.group_mark.setTitle(_translate("main_window", "Selection"))
-        self.label_mark_min.setText(_translate("main_window", "Minimum") + ':')
-        self.label_mark_max.setText(_translate("main_window", "Maximum") + ':')
+        self.group_mark.setTitle(_translate('main window', 'Selection'))
+        self.label_mark_min.setText(_translate('main window', 'Minimum') + ':')
+        self.label_mark_max.setText(_translate('main window', 'Maximum') + ':')
         if self.button_mark_min_reset.icon().isNull():
-            self.button_mark_min_reset.setText(_translate("main_window", "Reset"))
+            self.button_mark_min_reset.setText(_translate('main window', 'Reset'))
         if self.button_mark_max_reset.icon().isNull():
-            self.button_mark_max_reset.setText(_translate("main_window", "Reset"))
-        self.button_zoom_to_selection.setText(_translate("main_window", "Zoom to Selection"))
+            self.button_mark_max_reset.setText(_translate('main window', 'Reset'))
+        self.button_zoom_to_selection.setText(_translate('main window', 'Zoom to Selection'))
 
-        self.group_find_lines.setTitle(_translate("main_window", "Find Lines"))
-        self.group_find_lines.setToolTip(_translate("main_window",
-                                                    "Try to detect lines automatically"))
-        self.button_find_lines.setText(_translate("main_window", "Find Lines"))
-        self.button_clear_lines.setText(_translate("main_window", "Clear Lines"))
-        self.button_prev_line.setText(_translate("main_window", "Previous Line"))
-        self.button_next_line.setText(_translate("main_window", "Next Line"))
+        self.group_find_lines.setTitle(_translate('main window', 'Find Lines'))
+        self.group_find_lines.setToolTip(_translate('main window',
+                                                    'Try to detect lines automatically'))
+        self.label_threshold.setText(_translate('main window', 'Search threshold') + ':')
+        self.button_find_lines.setText(_translate('main window', 'Find Lines'))
+        self.button_clear_lines.setText(_translate('main window', 'Clear Lines'))
+        self.button_prev_line.setText(_translate('main window', 'Previous Line'))
+        self.button_next_line.setText(_translate('main window', 'Next Line'))
 
         self.spin_frequency_min.setSuffix(suffix_mhz)
         self.spin_frequency_max.setSuffix(suffix_mhz)
@@ -318,7 +326,7 @@ class App(QMainWindow):
         close_code = QMessageBox.No
         while close_code == QMessageBox.No:
             close = QMessageBox()
-            close.setText(_translate("main_window", "Are you sure?"))
+            close.setText(_translate('main window', 'Are you sure?'))
             close.setIcon(QMessageBox.Question)
             close.setWindowIcon(self.windowIcon())
             close.setWindowTitle(self.windowTitle())
@@ -326,8 +334,8 @@ class App(QMainWindow):
             close_code = close.exec()
 
             if close_code == QMessageBox.Yes:
-                self.settings.setValue("windowGeometry", self.saveGeometry())
-                self.settings.setValue("windowState", self.saveState())
+                self.settings.setValue('windowGeometry', self.saveGeometry())
+                self.settings.setValue('windowState', self.saveState())
                 self.settings.sync()
                 event.accept()
             elif close_code == QMessageBox.Cancel:
@@ -338,13 +346,13 @@ class App(QMainWindow):
         self._loading = True
         # common settings
         if self.settings.contains('windowGeometry'):
-            self.restoreGeometry(self.settings.value("windowGeometry", ""))
+            self.restoreGeometry(self.settings.value('windowGeometry', ''))
         else:
             window_frame = self.frameGeometry()
             desktop_center = QDesktopWidget().availableGeometry().center()
             window_frame.moveCenter(desktop_center)
             self.move(window_frame.topLeft())
-        _v = self.settings.value("windowState", "")
+        _v = self.settings.value('windowState', '')
         if isinstance(_v, str):
             self.restoreState(_v.encode())
         else:
@@ -365,18 +373,16 @@ class App(QMainWindow):
         self.plot.set_frequency_range(lower_value=min_freq, upper_value=max_freq)
         self.check_frequency_persists.setChecked(self.get_config_value('frequency', 'persists', False, bool))
 
-        min_voltage = self.get_config_value('voltage', 'lower',
-                                            self.spin_voltage_min.minimum(),
-                                            float)
-        max_voltage = self.get_config_value('voltage', 'upper',
-                                            self.spin_voltage_min.maximum(),
-                                            float)
+        min_voltage = self.get_config_value('voltage', 'lower', self.spin_voltage_min.minimum(), float)
+        max_voltage = self.get_config_value('voltage', 'upper', self.spin_voltage_min.maximum(), float)
         self.spin_voltage_min.setValue(min_voltage)
         self.spin_voltage_max.setValue(max_voltage)
         self.spin_voltage_min.setMaximum(max_voltage)
         self.spin_voltage_max.setMinimum(min_voltage)
         self.plot.set_voltage_range(lower_value=min_voltage, upper_value=max_voltage)
         self.check_voltage_persists.setChecked(self.get_config_value('voltage', 'persists', False, bool))
+
+        self.spin_threshold.setValue(self.get_config_value('lineSearch', 'threshold', 200.0, float))
 
         self._loading = False
         return
@@ -401,11 +407,11 @@ class App(QMainWindow):
         self.settings.setValue(key, value)
         self.settings.endGroup()
 
-    def load_data(self, lims):
+    def load_data(self, limits):
         if self._loading:
             return
-        if lims is not None:
-            min_freq, max_freq, min_voltage, max_voltage = lims
+        if limits is not None:
+            min_freq, max_freq, min_voltage, max_voltage = limits
             self.set_config_value('frequency', 'lower', min_freq)
             self.set_config_value('frequency', 'upper', max_freq)
             self.set_config_value('voltage', 'lower', min_voltage)
@@ -615,7 +621,7 @@ class App(QMainWindow):
                     and not self.plot.mark_mode \
                     and not self.plot.trace_mode \
                     and not self.plot.trace_multiple_mode:
-                min_freq, max_freq, min_voltage, max_voltage = self.plot.on_dblclick(event)
+                min_freq, max_freq, min_voltage, max_voltage = self.plot.on_double_click(event)
                 self.set_config_value('frequency', 'lower', min_freq)
                 self.set_config_value('frequency', 'upper', max_freq)
                 self.set_config_value('voltage', 'lower', min_voltage)

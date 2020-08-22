@@ -3,40 +3,14 @@
 import numpy as np
 from scipy import ndimage
 
-if __name__ == '__main__':
-    from matplotlib import pyplot as plt
-
 
 LINE_WIDTH = 2.6
 
 
-def fragment(sequence, grid, center, half_width):
-    i = np.searchsorted(grid, center - half_width)
-    j = np.searchsorted(grid, center)
-    k = 2 * j - i
-    if i > j:
-        i, j = j, i
-    if j > k:
-        j, k = k, j
-    return sequence[i:k]
-
-
-def fragments(sequence, grid, center, half_width):
-    i = np.searchsorted(grid, center - half_width)
-    j = np.searchsorted(grid, center)
-    k = 2 * j - i
-    if i > j:
-        i, j = j, i
-    if j > k:
-        j, k = k, j
-    return sequence[i:j], sequence[j:k]
-
-
-def remove_spikes(sequence):
-    sequence_right = np.roll(sequence, 1)
-    sequence_left = np.roll(sequence, -1)
-    spikes = np.not_equal(sequence, sequence_left) & np.equal(sequence_right, sequence_left)
-    sequence[spikes] = sequence_left[spikes]
+def remove_spikes(sequence: np.ndarray, iterations: int = 1) -> np.ndarray:
+    sequence = ndimage.binary_dilation(sequence, iterations=iterations)
+    sequence = ndimage.binary_erosion(sequence, iterations=iterations + 1)
+    sequence = ndimage.binary_dilation(sequence, iterations=1)
     return sequence
 
 
@@ -59,82 +33,65 @@ def correlation(model_y, another_x: np.ndarray, another_y: np.ndarray) -> np.nda
         return lfilter(*butter_bandpass(), data)
 
     if another_y.size:
-        _corr: np.ndarray = np.correlate(another_y, model_y, 'same')
+        fs: float = 1.0 / (another_x[1] - another_x[0])
+        another_y_filtered = butter_bandpass_filter(another_y, low_cut=0.005 * fs, high_cut=np.inf,
+                                                    order=5)
+        _corr: np.ndarray = np.correlate(another_y_filtered, model_y, 'same')
         _corr -= np.mean(_corr)
         _corr /= np.std(_corr)
-        fs: float = 1.0 / (another_x[1] - another_x[0])
-        _corr = butter_bandpass_filter(_corr, low_cut=0.005 * fs, high_cut=np.inf,
-                                       order=5)
         return _corr
     return np.empty(0)
 
 
-def positions(data_x, data_y) -> np.ndarray:
+def peaks_positions(data_x: np.ndarray, data_y: np.ndarray, threshold: float = 0.0046228) -> np.ndarray:
+    import pandas as pd
     if data_x.size < 2 or data_y.size < 2:
         # nothing to do
         return np.empty(0)
-    # correlate the signal with itself reversed around each point: lines are symmetrical, steps are asymmetrical
-    core: np.ndarray = np.copy(data_y)
-    anti_core: np.ndarray = np.copy(data_y)
-    for f in range(data_x.shape[0]):
-        if data_x[f] - data_x[0] <= LINE_WIDTH:
-            core[f] = np.nan
-            anti_core[f] = np.nan
-        elif data_x[-1] - data_x[f] <= LINE_WIDTH:
-            core[f] = np.nan
-            anti_core[f] = np.nan
-        else:
-            signal_fragments = fragments(data_y, data_x, data_x[f], 0.5 * LINE_WIDTH)
-            core[f] = np.mean(signal_fragments[0] - signal_fragments[1][::-1])
-            anti_core[f] = np.mean(signal_fragments[0] + signal_fragments[1][::-1])
 
-    if __name__ == '__main__':
-        plt.plot(data_x, core, label='core')
-        plt.plot(data_x, anti_core, label='anti-core')
-
-    not_nan_core: np.ndarray = np.abs(core[~np.isnan(core)])
-    not_nan_anti_core: np.ndarray = np.abs(anti_core[~np.isnan(anti_core)])
-    match: np.ndarray = np.array((not_nan_core > 3. * np.std(not_nan_core))
-                                 # & (not_nan_anti_core < 3. * np.std(not_nan_anti_core))
-                                 & (not_nan_anti_core < not_nan_core))
-    match = np.concatenate((np.full(int(np.floor((data_x.shape[0] - match.shape[0]) / 2)), False),
-                            match,
-                            np.full(int(np.ceil((data_x.shape[0] - match.shape[0]) / 2)), False)))
-    # for f in range(data_x.shape[0]):
-    #     if data_x[f] - data_x[0] > 1.5 * LINE_WIDTH and data_x[-1] - data_x[f] > 1.5 * LINE_WIDTH:
-    #         match[f] |= \
-    #             (core[f] > 3 * np.std(fragment(core, data_x, data_x[f], 1.5 * LINE_WIDTH))
-    #              and anti_core[f] > 3 * np.std(fragment(anti_core, data_x, data_x[f], 1.5 * LINE_WIDTH)))
-    for f in range(data_x.shape[0]):
-        if data_x[f] - data_x[0] > 1.5 * LINE_WIDTH and data_x[-1] - data_x[f] > 1.5 * LINE_WIDTH:
-            match[f] &= \
-                anti_core[f] < 3 * np.std(fragment(anti_core, data_x, data_x[f], 1.5 * LINE_WIDTH))
-    match = remove_spikes(match)
-    match = ndimage.binary_dilation(match, iterations=5)
-    match = ndimage.binary_erosion(match, iterations=2)
-    match = remove_spikes(match)
+    std: np.ndarray = pd.Series(data_y).rolling(round(LINE_WIDTH / (data_x[1] - data_x[0])),
+                                                center=True).std().to_numpy()
+    match: np.ndarray = np.array((std >= np.nanquantile(std, 1.0 - threshold)))
+    match = remove_spikes(match, iterations=8)
+    match[0] = match[-1] = False
     islands: np.ndarray = np.argwhere(np.diff(match)).reshape(-1, 2)
-    peaks: np.ndarray = np.array([i[0] + np.argmax(data_y[i[0]:i[1]]) for i in islands])
+    peaks: np.ndarray = np.array([i[0] + np.argmax(data_y[i[0]:i[1]])
+                                  for i in islands
+                                  if (np.argmax(data_y[i[0]:i[1]]) not in (0, i[1] - i[0]))])
     return peaks
 
 
 if __name__ == '__main__':
     def main():
-        # data = np.loadtxt('lines.csv')
+        """ try and error function """
+        from matplotlib import pyplot as plt
 
-        f = np.arange(118000.0, 118150.0, 0.1)
-        v = np.random.normal(size=(f.size,))
-        model = np.loadtxt('averaged fs signal.csv')
-        data = np.column_stack((f, correlation(model, f, v)))
+        # data: np.ndarray = np.loadtxt('lines.csv')
+
+        # f: np.ndarray = np.arange(118000.0, 118150.0, 0.1)
+        # v: np.ndarray = np.random.normal(size=(f.size,))
+        # model: np.ndarray = np.loadtxt('averaged fs signal.csv')
+        # data: np.ndarray = np.column_stack((f, correlation(model, f, v)))
+        # plt.plot(f, v, label='initial')
+
+        f: np.ndarray = np.arange(118000.0, 175000.0, 0.1)
+        v: np.ndarray = np.loadtxt('mo4/030820/OCS2.frd', usecols=(0,)).ravel()
+        v -= np.median(v)
+        model = np.loadtxt('averaged fs signal filtered.csv')
+        plt.xlim(134198.5 - 10, 134198.5 + 10)
+        data: np.ndarray = correlation(model, f, v)
         plt.plot(f, v, label='initial')
 
-        plt.plot(data[..., 0], data[..., 1], label='correlation')
-        found_lines = positions(data[..., 0], data[..., 1])
+        found_lines = peaks_positions(f, data)
         if found_lines.size:
-            plt.plot(data[found_lines, 0], data[found_lines, 1], ls='', marker='o')
-            plt.tight_layout()
-            plt.legend()
-            plt.show()
+            print(f'found {found_lines.size} lines:')
+            for ff, fd in zip(f[found_lines], v[found_lines]):
+                print(f'{ff:.3f}\t{-fd:.6f}')
+            plt.plot(f[found_lines], v[found_lines], ls='', marker='o')
+        plt.tight_layout()
+        plt.legend(loc='upper left')
+        plt.grid()
+        plt.show()
 
 
     main()

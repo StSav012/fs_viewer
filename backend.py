@@ -2,7 +2,7 @@
 
 import os
 import sys
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,7 @@ from matplotlib.lines import Line2D
 
 import figureoptions
 import mplcursors
-from detection import correlation, positions
+import detection
 
 FRAME_SIZE = 50.
 LINES_COUNT = 2
@@ -71,7 +71,7 @@ def load_icon(filename):
 
 
 class SubplotToolQt(QDialog):
-    def __init__(self, targetfig, parent):
+    def __init__(self, target_fig, parent):
         super().__init__(parent)
         self.setObjectName("SubplotTool")
 
@@ -114,7 +114,7 @@ class SubplotToolQt(QDialog):
 
         self._widgets[self._actions[2]].setFocus()
 
-        self._figure = targetfig
+        self._figure = target_fig
 
         for lower, higher in [(self._attrs[1], self._attrs[0]), (self._attrs[2], self._attrs[3])]:
             self._widgets[lower].valueChanged.connect(lambda val: self._widgets[higher].setMinimum(val + .005))
@@ -184,6 +184,7 @@ class NavigationToolbar(NavigationToolbar2QT):
         self.trace_multiple_action = QAction(self)
         self.copy_trace_action = QAction(self)
         self.save_trace_action = QAction(self)
+        self.clear_trace_action = QAction(self)
         self.subplots_action = QAction(self)
         self.configure_action = QAction(self)
 
@@ -199,16 +200,17 @@ class NavigationToolbar(NavigationToolbar2QT):
                          self.trace_multiple_action,
                          self.copy_trace_action,
                          self.save_trace_action,
+                         self.clear_trace_action,
                          self.subplots_action,
                          self.configure_action],
                         ['open', 'delete',
                          'pan', 'zoom',
-                         'savetable', 'measureline',
-                         'saveimage',
-                         'selectobject', 'selectmultiple',
-                         'copyselected', 'saveselected',
+                         'saveTable', 'measureLine',
+                         'saveImage',
+                         'selectObject', 'selectMultiple',
+                         'copySelected', 'saveSelected', 'clearSelected',
                          'size', 'configure']):
-            a.setIcon(load_icon(i))
+            a.setIcon(load_icon(i.lower()))
 
         self.addAction(self.open_action)
         self.addAction(self.clear_action)
@@ -225,6 +227,7 @@ class NavigationToolbar(NavigationToolbar2QT):
         self.addAction(self.trace_multiple_action)
         self.addAction(self.copy_trace_action)
         self.addAction(self.save_trace_action)
+        self.addAction(self.clear_trace_action)
         self.addSeparator()
         self.addAction(self.subplots_action)
         self.addAction(self.configure_action)
@@ -239,6 +242,7 @@ class NavigationToolbar(NavigationToolbar2QT):
         self.trace_multiple_action.setEnabled(False)
         self.copy_trace_action.setEnabled(False)
         self.save_trace_action.setEnabled(False)
+        self.clear_trace_action.setEnabled(False)
         self.configure_action.setEnabled(False)
 
         self.zoom_action.setCheckable(True)
@@ -267,7 +271,7 @@ class NavigationToolbar(NavigationToolbar2QT):
         pass
 
     def _update_buttons_checked(self):
-        # sync button checkstates to match active mode
+        # sync button check states to match active mode
         if hasattr(self, '_active'):  # matplotlib 3.2 → 3.3
             self.pan_action.setChecked(self._active == 'PAN')
             self.zoom_action.setChecked(self._active == 'ZOOM')
@@ -348,6 +352,10 @@ class Plot:
         _min_mark: Optional[float]
         _max_mark: Optional[float]
         _ignore_scale_change: bool
+        _ax_v_lines: List[Line2D]
+        on_xlim_changed_callback: Optional[Callable]
+        on_ylim_changed_callback: Optional[Callable]
+        on_data_loaded_callback: Optional[Callable]
 
     def __init__(self, figure, toolbar, *, legend_figure=None, settings=None, **kwargs):
         if settings is None:
@@ -382,6 +390,7 @@ class Plot:
         self._toolbar.trace_multiple_action.toggled.connect(self.plot_trace_multiple_action_toggled)
         self._toolbar.copy_trace_action.triggered.connect(self.plot_copy_trace_action_triggered)
         self._toolbar.save_trace_action.triggered.connect(self.plot_save_trace_action_triggered)
+        self._toolbar.clear_trace_action.triggered.connect(self.plot_clear_trace_action_triggered)
         self._toolbar.subplots_action.triggered.connect(self._toolbar.configure_subplots)
         self._toolbar.configure_action.triggered.connect(self._toolbar.edit_parameters)
 
@@ -400,14 +409,14 @@ class Plot:
         def on_pick(event):
             # on the pick event, find the orig line corresponding to the
             # legend proxy line, and toggle the visibility
-            _legline = event.artist
+            _leg_line = event.artist
             if self._legend is None:
                 return
-            _index = LINES_COUNT - self._legend.get_lines()[::-1].index(_legline) - 1
+            _index = LINES_COUNT - self._legend.get_lines()[::-1].index(_leg_line) - 1
             for _lines_set in [self._plot_lines, self._plot_mark_lines]:
-                _origline = _lines_set[_index]
-                vis = not _origline.get_visible()
-                _origline.set_visible(vis)
+                _orig_line = _lines_set[_index]
+                vis = not _orig_line.get_visible()
+                _orig_line.set_visible(vis)
                 if vis:
                     _max_z_order = None
                     for _i in range(LINES_COUNT):
@@ -417,11 +426,11 @@ class Plot:
                             else:
                                 _max_z_order = max(_lines_set[_i].zorder, _max_z_order)
                     if _max_z_order is not None:
-                        _origline.set_zorder(_max_z_order + 1)
+                        _orig_line.set_zorder(_max_z_order + 1)
             if vis:
-                _legline.set_alpha(1.0)
+                _leg_line.set_alpha(1.0)
             else:
-                _legline.set_alpha(0.2)
+                _leg_line.set_alpha(0.2)
             self._legend_figure.canvas.draw()
             self._canvas.draw_idle()
 
@@ -459,9 +468,9 @@ class Plot:
 
         self._ignore_scale_change = False
 
-        self._axvlines = [self._figure.axvline(np.nan, color='grey', linewidth=0.5,
-                                               label='_ vertical line {}'.format(i + 1))
-                          for i in range(GRID_LINES_COUNT)]
+        self._ax_v_lines = [self._figure.axvline(np.nan, color='grey', linewidth=0.5,
+                                                 label='_ vertical line {}'.format(i + 1))
+                            for i in range(GRID_LINES_COUNT)]
 
         self.on_xlim_changed_callback = kwargs.pop('on_xlim_changed', None)
         self.on_ylim_changed_callback = kwargs.pop('on_ylim_changed', None)
@@ -476,7 +485,7 @@ class Plot:
         self.load_settings()
 
         try:
-            self.model_signal: np.ndarray = np.loadtxt('averaged fs signal.csv')
+            self.model_signal: np.ndarray = np.loadtxt('averaged fs signal filtered.csv')
         except (OSError, BlockingIOError):
             self.model_signal: np.ndarray = np.empty(0)
         self.found_lines: List[Line2D] = [self._figure.plot(np.empty(0),
@@ -488,8 +497,8 @@ class Plot:
     def translate_ui(self):
         _translate = QCoreApplication.translate
 
-        suffix_mhz = ' ' + _translate("main_window", "MHz")
-        suffix_mv = ' ' + _translate("main_window", "mV")
+        suffix_mhz = ' ' + _translate('unit', 'MHz')
+        suffix_mv = ' ' + _translate('unit', 'mV')
 
         self._figure.set_xlabel(_translate("plot axes labels", 'Frequency [MHz]'))
         self._figure.set_ylabel(_translate("plot axes labels", 'Voltage [mV]'))
@@ -501,7 +510,7 @@ class Plot:
         self._toolbar.clear_action.setToolTip(_translate("plot toolbar action", "Clear lines and markers"))
         self._toolbar.zoom_action.setIconText(_translate("plot toolbar action", "Zoom"))
         self._toolbar.zoom_action.setToolTip(_translate("plot toolbar action",
-                                                        "Zoom to rectangle with left mouse, unzoom with right"))
+                                                        "Zoom to rectangle with left mouse, un-zoom with right"))
         self._toolbar.pan_action.setIconText(_translate("plot toolbar action", "Pan"))
         self._toolbar.pan_action.setToolTip(_translate("plot toolbar action",
                                                        "Pan axes with left mouse, zoom with right"))
@@ -521,6 +530,8 @@ class Plot:
                                                               "Copy marked points values into clipboard"))
         self._toolbar.save_trace_action.setIconText(_translate("plot toolbar action", "Save Marked"))
         self._toolbar.save_trace_action.setToolTip(_translate("plot toolbar action", "Save marked points values"))
+        self._toolbar.clear_trace_action.setIconText(_translate("plot toolbar action", "Clear Marked"))
+        self._toolbar.clear_trace_action.setToolTip(_translate("plot toolbar action", "Clear marked points values"))
         self._toolbar.subplots_action.setIconText(_translate("plot toolbar action", "Position and Size"))
         self._toolbar.subplots_action.setToolTip(_translate("plot toolbar action", "Edit plot position and size"))
         self._toolbar.configure_action.setIconText(_translate("plot toolbar action", "Configure"))
@@ -536,7 +547,7 @@ class Plot:
             return (line.original_label + '\n'
                     + '{:.3f}' + suffix_mhz + '\n'
                     + '{:.3f}' + suffix_mv + '\n'
-                    + '{:.3f}' + suffix_mv + ' ' + _translate("main_window", "to mean")).format(x, y, y - average_y)
+                    + '{:.3f}' + suffix_mv + ' ' + _translate('main window', "to mean")).format(x, y, y - average_y)
 
         def cursor_add_action(sel):
             sel.annotation.set_text(annotation_text(sel))
@@ -549,17 +560,18 @@ class Plot:
     def make_grid(self, xlim):
         if any(map(lambda lim: lim is None, xlim)):
             return
-        if np.ptp(xlim) // FRAME_SIZE <= len(self._axvlines):
-            minor_xticks = np.arange(
+        if np.ptp(xlim) // FRAME_SIZE <= len(self._ax_v_lines):
+            minor_x_ticks = np.arange(
                 np.floor_divide(min(xlim), FRAME_SIZE) * FRAME_SIZE,
                 (np.floor_divide(max(xlim), FRAME_SIZE) + 1) * FRAME_SIZE,
                 FRAME_SIZE)
-            if minor_xticks.size < len(self._axvlines):
-                minor_xticks = np.concatenate((minor_xticks, np.full(len(self._axvlines) - minor_xticks.size, np.nan)))
-            for index, line in enumerate(self._axvlines):
-                line.set_xdata(minor_xticks[index])
+            if minor_x_ticks.size < len(self._ax_v_lines):
+                minor_x_ticks = np.concatenate((minor_x_ticks,
+                                                np.full(len(self._ax_v_lines) - minor_x_ticks.size, np.nan)))
+            for index, line in enumerate(self._ax_v_lines):
+                line.set_xdata(minor_x_ticks[index])
         else:
-            for line in self._axvlines:
+            for line in self._ax_v_lines:
                 line.set_xdata(np.nan)
 
     def on_xlim_changed(self, axes):
@@ -582,7 +594,7 @@ class Plot:
             self._ignore_scale_change = False
 
     def load_settings(self):
-        attrs = ["top", "bottom", "left", "right"]
+        attrs = ['top', 'bottom', 'left', 'right']
         defaults = {attr: vars(self._canvas.figure.subplotpars)[attr] for attr in attrs}
         self._canvas.figure.subplots_adjust(**{attr: self.get_config_value('margins', attr, defaults[attr], float)
                                                for attr in attrs})
@@ -600,7 +612,7 @@ class Plot:
     def labels(self):
         return self._plot_lines_labels
 
-    def on_dblclick(self, event):
+    def on_double_click(self, event):
         event.inaxes.set_autoscaley_on(True)
         event.inaxes.relim(visible_only=True)
         event.inaxes.autoscale_view(None, None, None)
@@ -659,7 +671,7 @@ class Plot:
         self._canvas.draw_idle()
         self._ignore_scale_change = False
 
-    def find_lines(self):
+    def find_lines(self, threshold: float):
         if self.model_signal.size < 2:
             return
 
@@ -674,9 +686,10 @@ class Plot:
             f = interpolate.interp1d(x_model, self.model_signal, kind=2)
             x_model_new: np.ndarray = np.arange(x_model[0], x_model[-1], x[1] - x[0])
             y_model_new: np.ndarray = f(x_model_new)
-            match = positions(x, correlation(y_model_new, x, y))
-            if match.size:
-                self.found_lines[i].set_data(x[match], y[match])
+            found_lines = detection.peaks_positions(x, detection.correlation(y_model_new, x, y),
+                                                    threshold=1.0 / threshold)
+            if found_lines.size:
+                self.found_lines[i].set_data(x[found_lines], y[found_lines])
             else:
                 self.found_lines[i].set_data(np.empty(0), np.empty(0))
         self._canvas.draw_idle()
@@ -760,6 +773,7 @@ class Plot:
         self._toolbar.trace_multiple_action.setEnabled(False)
         self._toolbar.copy_trace_action.setEnabled(False)
         self._toolbar.save_trace_action.setEnabled(False)
+        self._toolbar.clear_trace_action.setEnabled(False)
         self._toolbar.configure_action.setEnabled(False)
 
     def load_data(self):
@@ -773,9 +787,9 @@ class Plot:
                     if line and not line.startswith('*'):
                         t = list(map(lambda w: w.strip(), line.split(':', maxsplit=1)))
                         if len(t) > 1:
-                            if t[0] == 'Fstart [GHz]':
+                            if t[0].lower() == 'FStart [GHz]'.lower():
                                 _min_frequency = float(t[1])
-                            elif t[0] == 'Fstop [GHz]':
+                            elif t[0].lower() == 'FStop [GHz]'.lower():
                                 _max_frequency = float(t[1])
         else:
             return None
@@ -817,9 +831,9 @@ class Plot:
                     self._legend_figure.canvas.setMaximumHeight(we.height)
                     self._legend_figure.canvas.draw()
                     # self._legend_figure.canvas.setVisible(True)
-                    for _legline in self._legend.get_lines():
-                        _legline.set_pickradius(5)
-                        _legline.set_picker(True)
+                    for _leg_line in self._legend.get_lines():
+                        _leg_line.set_pickradius(5)
+                        _leg_line.set_picker(True)
 
             self._toolbar.clear_action.setEnabled(True)
             self._toolbar.zoom_action.setEnabled(True)
@@ -831,6 +845,7 @@ class Plot:
             self._toolbar.trace_multiple_action.setEnabled(True)
             self._toolbar.copy_trace_action.setEnabled(True)
             self._toolbar.save_trace_action.setEnabled(True)
+            self._toolbar.clear_trace_action.setEnabled(True)
             self._toolbar.configure_action.setEnabled(True)
 
             if self.on_data_loaded_callback is not None and callable(self.on_data_loaded_callback):
@@ -951,6 +966,9 @@ class Plot:
                                      csv_sep=sep,
                                      xlsx_header=['Frequency [MHz]', 'Voltage [mV]', 'Voltage to Mean [mV]'])
 
+    def plot_clear_trace_action_triggered(self):
+        self.clear_selections()
+
     def save_data(self, filename, _filter):
         if self._plot_voltages[-1].size == 0 or not filename:
             return
@@ -1005,14 +1023,14 @@ class Plot:
         sorted_filetypes = sorted(filetypes.items())
 
         filters = ';;'.join([
-            f'{name} ({" ".join([("*." + ext) for ext in exts])})'
-            for name, exts in sorted_filetypes
+            f'{name} ({" ".join([("*." + ext) for ext in extensions])})'
+            for name, extensions in sorted_filetypes
         ])
 
-        fname, _filter = self.save_file_dialog(_filter=filters)
-        if fname:
+        figure_file_name, _filter = self.save_file_dialog(_filter=filters)
+        if figure_file_name:
             try:
-                self._canvas.figure.savefig(fname)
+                self._canvas.figure.savefig(figure_file_name)
             except Exception as e:
                 QMessageBox.critical(self._canvas.parent(), "Error saving file", str(e),
                                      QMessageBox.Ok, QMessageBox.NoButton)
