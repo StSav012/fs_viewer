@@ -2,14 +2,14 @@
 
 import os
 import sys
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Dict, Union, Tuple, Any, Type
 
 import numpy as np
 import pandas as pd
 from PyQt5.QtCore import QCoreApplication, QSettings, QSize, Qt
 from PyQt5.QtGui import QGuiApplication, QIcon, QPixmap
 from PyQt5.QtWidgets import QAction, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, \
-    QLabel, QMessageBox, QPushButton, QSizePolicy, QVBoxLayout
+    QLabel, QMessageBox, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 from matplotlib import cbook
 from matplotlib.artist import Artist
 from matplotlib.axes import Axes
@@ -17,18 +17,20 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationTool
 from matplotlib.figure import Figure
 from matplotlib.legend import Legend
 from matplotlib.lines import Line2D
+from matplotlib.transforms import Bbox
 
+import detection
 import figureoptions
 import mplcursors
-import detection
+from mplcursors import Selection
 
-FRAME_SIZE = 50.
-LINES_COUNT = 2
-GRID_LINES_COUNT = 32
+FRAME_SIZE: float = 50.
+LINES_COUNT: int = 2
+GRID_LINES_COUNT: int = 32
 
-TRACE_AVERAGING_RANGE = 25.
+TRACE_AVERAGING_RANGE: float = 25.
 
-IMAGE_EXT = '.svg'
+IMAGE_EXT: str = '.svg'
 
 
 def nonemin(x):
@@ -58,45 +60,48 @@ def nonemax(x):
 
 
 # https://www.reddit.com/r/learnpython/comments/4kjie3/how_to_include_gui_images_with_pyinstaller/d3gjmom
-def resource_path(relative_path):
+def resource_path(relative_path: str) -> str:
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(getattr(sys, '_MEIPASS'), relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
 
-def load_icon(filename):
-    icon = QIcon()
+def load_icon(filename: str) -> QIcon:
+    icon: QIcon = QIcon()
     icon.addPixmap(QPixmap(resource_path(os.path.join('img', filename + IMAGE_EXT))), QIcon.Normal, QIcon.Off)
     return icon
 
 
 class SubplotToolQt(QDialog):
-    def __init__(self, target_fig, parent):
+    _widgets: Dict[str, Union[QDoubleSpinBox, QDoubleSpinBox, QPushButton, QPushButton]]
+
+    def __init__(self, target_fig: Figure, parent: Optional[QWidget]):
         super().__init__(parent)
         self.setObjectName("SubplotTool")
 
         _translate = QCoreApplication.translate
 
-        self._widgets = {}
+        self._widgets: Dict[str, Union[QDoubleSpinBox, QPushButton]] = {}
+        widget: Union[QDoubleSpinBox, QPushButton]
 
-        layout = QHBoxLayout()
+        layout: QHBoxLayout = QHBoxLayout()
         self.setLayout(layout)
 
-        left = QVBoxLayout()
+        left: QVBoxLayout = QVBoxLayout()
         layout.addLayout(left)
-        right = QVBoxLayout()
+        right: QVBoxLayout = QVBoxLayout()
         layout.addLayout(right)
 
-        box = QGroupBox(_translate("plot borders settings", "Borders"))
+        box: QGroupBox = QGroupBox(_translate("plot borders settings", "Borders"))
         left.addWidget(box)
-        inner = QFormLayout(box)
-        self._attrs = ["top",
-                       "bottom",
-                       "left",
-                       "right"]
-        self._actions = [_translate("plot borders settings", "Tight layout"),
-                         _translate("plot borders settings", "Reset"),
-                         _translate("plot borders settings", "Close")]
+        inner: QFormLayout = QFormLayout(box)
+        self._attrs: List[str] = ["top",
+                                  "bottom",
+                                  "left",
+                                  "right"]
+        self._actions: List[str] = [_translate("plot borders settings", "Tight layout"),
+                                    _translate("plot borders settings", "Reset"),
+                                    _translate("plot borders settings", "Close")]
         for side in self._attrs:
             self._widgets[side] = widget = QDoubleSpinBox()
             widget.setMinimum(0)
@@ -107,6 +112,7 @@ class SubplotToolQt(QDialog):
             inner.addRow(_translate("plot borders settings", side), widget)
         left.addStretch(1)
 
+        action: str
         for action in self._actions:
             self._widgets[action] = widget = QPushButton(action)
             widget.setAutoDefault(False)
@@ -114,7 +120,7 @@ class SubplotToolQt(QDialog):
 
         self._widgets[self._actions[2]].setFocus()
 
-        self._figure = target_fig
+        self._figure: Figure = target_fig
 
         for lower, higher in [(self._attrs[1], self._attrs[0]), (self._attrs[2], self._attrs[3])]:
             self._widgets[lower].valueChanged.connect(lambda val: self._widgets[higher].setMinimum(val + .005))
@@ -126,8 +132,10 @@ class SubplotToolQt(QDialog):
         # self._reset()
         self.load_settings()
 
+        attr: str
         for attr in self._attrs:
             self._widgets[attr].valueChanged.connect(self._on_value_changed)
+        meathod: Callable
         for action, method in zip(self._actions, [self._tight_layout, self._reset, self.close]):
             self._widgets[action].clicked.connect(method)
 
@@ -138,8 +146,9 @@ class SubplotToolQt(QDialog):
 
     def _tight_layout(self):
         self._figure.tight_layout()
+        attr: str
         for attr in self._attrs:
-            widget = self._widgets[attr]
+            widget: Union[QDoubleSpinBox, QPushButton] = self._widgets[attr]
             widget.blockSignals(True)
             widget.setValue(vars(self._figure.subplotpars)[attr])
             widget.blockSignals(False)
@@ -147,13 +156,16 @@ class SubplotToolQt(QDialog):
         self.save_settings()
 
     def _reset(self):
+        attr: str
+        value: float
         for attr, value in self._defaults.items():
             self._widgets[attr].setValue(value)
 
     def load_settings(self):
         if super().parent is not None and hasattr(super().parent(), 'get_config_value'):
+            attr: str
             for attr in self._attrs:
-                widget = self._widgets[attr]
+                widget: Union[QDoubleSpinBox, QPushButton] = self._widgets[attr]
                 widget.blockSignals(True)
                 widget.setValue(
                     super().parent().get_config_value('margins', attr, self._defaults[attr], float))
@@ -161,6 +173,7 @@ class SubplotToolQt(QDialog):
 
     def save_settings(self):
         if super().parent() is not None and hasattr(super().parent(), 'set_config_value'):
+            attr: str
             for attr in self._attrs:
                 super().parent().set_config_value('margins', attr, self._widgets[attr].value())
 
@@ -189,6 +202,8 @@ class NavigationToolbar(NavigationToolbar2QT):
         self.configure_action = QAction(self)
 
         # TODO: add keyboard shortcuts
+        a: QAction
+        i: str
         for a, i in zip([self.open_action,
                          self.clear_action,
                          self.pan_action,
@@ -255,10 +270,10 @@ class NavigationToolbar(NavigationToolbar2QT):
         # The stretch factor is 1 which means any resizing of the toolbar
         # will resize this label instead of the buttons.
         if self.coordinates:
-            self.locLabel = QLabel("", self)
+            self.locLabel: QLabel = QLabel('', self)
             self.locLabel.setAlignment(Qt.AlignRight | Qt.AlignTop)
             self.locLabel.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored))
-            label_action = self.addWidget(self.locLabel)
+            label_action: QAction = self.addWidget(self.locLabel)
             label_action.setVisible(True)
 
         # Aesthetic adjustments - we need to set these explicitly in PyQt5
@@ -302,7 +317,7 @@ class NavigationToolbar(NavigationToolbar2QT):
 
         if event.inaxes and event.inaxes.get_navigate():
             try:
-                s = event.inaxes.format_coord(event.xdata, event.ydata)
+                s: str = event.inaxes.format_coord(event.xdata, event.ydata)
             except (ValueError, OverflowError):
                 pass
             else:
@@ -322,7 +337,7 @@ class NavigationToolbar(NavigationToolbar2QT):
                         topmost_artist = getattr(cbook, 'topmost_artist')
                     else:
                         return
-                    a = topmost_artist(artists)
+                    a: Artist = topmost_artist(artists)
                     if a is not event.inaxes.patch:
                         data = a.get_cursor_data(event)
                         if data is not None:
@@ -333,31 +348,33 @@ class NavigationToolbar(NavigationToolbar2QT):
 
 
 class Plot:
-    if sys.version_info > (3, 4):
-        settings: QSettings
-        _canvas: FigureCanvasQTAgg
-        _legend_figure: Optional[Figure]
-        _figure: Axes
-        _toolbar: NavigationToolbar
-        _legend: Optional[Legend]
-        _plot_lines: List[Line2D]
-        _plot_mark_lines: List[Line2D]
-        _plot_lines_labels: List[str]
-        _plot_frequencies: List[np.ndarray]
-        _plot_voltages: List[np.ndarray]
-        _min_frequency: Optional[float]
-        _max_frequency: Optional[float]
-        _min_voltage: Optional[float]
-        _max_voltage: Optional[float]
-        _min_mark: Optional[float]
-        _max_mark: Optional[float]
-        _ignore_scale_change: bool
-        _ax_v_lines: List[Line2D]
-        on_xlim_changed_callback: Optional[Callable]
-        on_ylim_changed_callback: Optional[Callable]
-        on_data_loaded_callback: Optional[Callable]
+    settings: QSettings
+    _canvas: FigureCanvasQTAgg
+    _legend_figure: Optional[Figure]
+    _figure: Axes
+    _toolbar: NavigationToolbar
+    _legend: Optional[Legend]
+    _plot_lines: List[Line2D]
+    _plot_mark_lines: List[Line2D]
+    _plot_lines_labels: List[str]
+    _plot_frequencies: List[np.ndarray]
+    _plot_voltages: List[np.ndarray]
+    _min_frequency: Optional[float]
+    _max_frequency: Optional[float]
+    _min_voltage: Optional[float]
+    _max_voltage: Optional[float]
+    _min_mark: Optional[float]
+    _max_mark: Optional[float]
+    _ignore_scale_change: bool
+    _ax_v_lines: List[Line2D]
+    on_xlim_changed_callback: Optional[Callable]
+    on_ylim_changed_callback: Optional[Callable]
+    on_data_loaded_callback: Optional[Callable]
 
-    def __init__(self, figure, toolbar, *, legend_figure=None, settings=None, **kwargs):
+    def __init__(self, figure: Figure, toolbar: NavigationToolbar, *,
+                 legend_figure: Optional[Figure] = None,
+                 settings: Optional[QSettings] = None,
+                 **kwargs):
         if settings is None:
             self.settings = QSettings("SavSoft", "Fast Sweep Viewer")
         else:
@@ -415,10 +432,10 @@ class Plot:
             _index = LINES_COUNT - self._legend.get_lines()[::-1].index(_leg_line) - 1
             for _lines_set in [self._plot_lines, self._plot_mark_lines]:
                 _orig_line = _lines_set[_index]
-                vis = not _orig_line.get_visible()
+                vis: bool = not _orig_line.get_visible()
                 _orig_line.set_visible(vis)
                 if vis:
-                    _max_z_order = None
+                    _max_z_order: Optional[int] = None
                     for _i in range(LINES_COUNT):
                         if _i != _index:
                             if _max_z_order is None:
@@ -495,7 +512,7 @@ class Plot:
                                           for i in range(LINES_COUNT)]
 
     def translate_ui(self):
-        _translate = QCoreApplication.translate
+        _translate: Callable[[str, str, Optional[str], int], str] = QCoreApplication.translate
 
         suffix_mhz = ' ' + _translate('unit', 'MHz')
         suffix_mv = ' ' + _translate('unit', 'mV')
@@ -537,19 +554,19 @@ class Plot:
         self._toolbar.configure_action.setIconText(_translate("plot toolbar action", "Configure"))
         self._toolbar.configure_action.setToolTip(_translate("plot toolbar action", "Edit curve parameters"))
 
-        def annotation_text(sel):
-            x = sel.target[0]
-            y = sel.target[1]
-            line = sel.artist
-            good = np.abs(line.get_xdata() - x) < TRACE_AVERAGING_RANGE
-            average_y = np.mean(line.get_ydata()[good])
+        def annotation_text(sel: Selection):
+            x: np.float64 = sel.target[0]
+            y: np.float64 = sel.target[1]
+            line: Line2D = sel.artist
+            good: np.ndarray = np.abs(line.get_xdata() - x) < TRACE_AVERAGING_RANGE
+            average_y: Union[np.float64, np.ndarray] = np.mean(line.get_ydata()[good])
             setattr(sel.target, 'offset', average_y)
             return (line.original_label + '\n'
                     + '{:.3f}' + suffix_mhz + '\n'
                     + '{:.3f}' + suffix_mv + '\n'
                     + '{:.3f}' + suffix_mv + ' ' + _translate('main window', "to mean")).format(x, y, y - average_y)
 
-        def cursor_add_action(sel):
+        def cursor_add_action(sel: Selection):
             sel.annotation.set_text(annotation_text(sel))
             if hasattr(sel.artist, 'original_label'):
                 setattr(sel.annotation, 'original_label', sel.artist.original_label)
@@ -577,7 +594,7 @@ class Plot:
     def on_xlim_changed(self, axes):
         if self._ignore_scale_change:
             return
-        xlim = axes.get_xlim()
+        xlim: Tuple[float, float] = axes.get_xlim()
         self.make_grid(xlim)
         if self.on_xlim_changed_callback is not None and callable(self.on_xlim_changed_callback):
             self._ignore_scale_change = True
@@ -587,15 +604,15 @@ class Plot:
     def on_ylim_changed(self, axes):
         if self._ignore_scale_change:
             return
-        ylim = axes.get_ylim()
+        ylim: Tuple[float, float] = axes.get_ylim()
         if self.on_ylim_changed_callback is not None and callable(self.on_ylim_changed_callback):
             self._ignore_scale_change = True
             self.on_ylim_changed_callback(ylim)
             self._ignore_scale_change = False
 
     def load_settings(self):
-        attrs = ['top', 'bottom', 'left', 'right']
-        defaults = {attr: vars(self._canvas.figure.subplotpars)[attr] for attr in attrs}
+        attrs: List[str] = ['top', 'bottom', 'left', 'right']
+        defaults: Dict[str, float] = {attr: vars(self._canvas.figure.subplotpars)[attr] for attr in attrs}
         self._canvas.figure.subplots_adjust(**{attr: self.get_config_value('margins', attr, defaults[attr], float)
                                                for attr in attrs})
         self._canvas.draw_idle()
@@ -636,29 +653,32 @@ class Plot:
 
     def draw_data(self, marks):
         self._ignore_scale_change = True
+        i: int
+        x: np.ndarray
+        y: np.ndarray
         for i, (x, y) in enumerate(zip(self._plot_frequencies, self._plot_voltages)):
-            left_x = np.empty(0)
-            left_y = np.empty(0)
-            middle_x = x
-            middle_y = y
-            right_x = np.empty(0)
-            right_y = np.empty(0)
+            left_x: np.ndarray = np.empty(0)
+            left_y: np.ndarray = np.empty(0)
+            middle_x: np.ndarray = x
+            middle_y: np.ndarray = y
+            right_x: np.ndarray = np.empty(0)
+            right_y: np.ndarray = np.empty(0)
             if marks[0] is not None:
-                good = (middle_x < marks[0])
+                good: np.ndarray = (middle_x < marks[0])
                 left_x = middle_x[good]
                 left_y = middle_y[good]
                 middle_x = middle_x[~good]
                 middle_y = middle_y[~good]
                 del good
             if marks[1] is not None:
-                good = (middle_x > marks[1])
+                good: np.ndarray = (middle_x > marks[1])
                 right_x = middle_x[good]
                 right_y = middle_y[good]
                 middle_x = middle_x[~good]
                 middle_y = middle_y[~good]
                 del good
-            side_x = np.concatenate((left_x, [np.nan], right_x))
-            side_y = np.concatenate((left_y, [np.nan], right_y))
+            side_x: np.ndarray = np.concatenate((left_x, [np.nan], right_x))
+            side_y: np.ndarray = np.concatenate((left_y, [np.nan], right_y))
             if self._plot_lines[i].get_xdata().size == 0:
                 self._figure.set_xlim(self._min_frequency, self._max_frequency)
                 self._figure.set_ylim(self._min_voltage, self._max_voltage)
@@ -726,11 +746,13 @@ class Plot:
             return init_frequency
 
     def clear_lines(self):
+        line: Line2D
         for line in self.found_lines:
             line.set_data(np.empty(0), np.empty(0))
         self._canvas.draw_idle()
 
     def clear_selections(self):
+        sel: Selection
         for sel in self.plot_trace_multiple_cursor.selections:
             self.plot_trace_multiple_cursor.remove_selection(sel)
         for sel in self.plot_trace_cursor.selections:
@@ -740,6 +762,7 @@ class Plot:
     def clear(self):
         self._plot_voltages = [np.empty(0)] * LINES_COUNT
         self._plot_frequencies = [np.empty(0)] * LINES_COUNT
+        line: Line2D
         for line in self._plot_lines:
             line.set_data(np.empty(0), np.empty(0))
         for line in self._plot_mark_lines:
@@ -777,12 +800,15 @@ class Plot:
         self._toolbar.configure_action.setEnabled(False)
 
     def load_data(self):
+        filename: str
+        _filter: str
         filename, _filter = self.open_file_dialog(_filter="Spectrometer Settings (*.fmd);;All Files (*)")
         fn = os.path.splitext(filename)[0]
-        _min_frequency = self._min_frequency
-        _max_frequency = self._max_frequency
+        _min_frequency: Optional[float] = self._min_frequency
+        _max_frequency: Optional[float] = self._max_frequency
         if os.path.exists(fn + '.fmd'):
             with open(fn + '.fmd', 'r') as fin:
+                line: str
                 for line in fin:
                     if line and not line.startswith('*'):
                         t = list(map(lambda w: w.strip(), line.split(':', maxsplit=1)))
@@ -792,18 +818,18 @@ class Plot:
                             elif t[0].lower() == 'FStop [GHz]'.lower():
                                 _max_frequency = float(t[1])
         else:
-            return None
+            return
         if os.path.exists(fn + '.frd'):
             self._plot_voltages = self._plot_voltages[1:] + [np.loadtxt(fn + '.frd', usecols=(0,))]
             self._plot_frequencies = self._plot_frequencies[1:] + [np.linspace(_min_frequency, _max_frequency,
                                                                                num=self._plot_voltages[-1].size,
                                                                                endpoint=False)]
-            new_label_base = os.path.split(fn)[-1]
-            new_label = new_label_base
-            i = 1
+            new_label_base: str = os.path.split(fn)[-1]
+            new_label: str = new_label_base
+            i: int = 1
             while new_label in self._plot_lines_labels[1:]:
                 i += 1
-                new_label = '{} ({})'.format(new_label_base, i)
+                new_label = f'{new_label_base} ({i})'
             self._plot_lines_labels = self._plot_lines_labels[1:] + [new_label]
             self._min_frequency = nonemin((_min_frequency, self._min_frequency))
             self._max_frequency = nonemax((_max_frequency, self._max_frequency))
@@ -814,8 +840,9 @@ class Plot:
             if any(map(lambda l: not l.startswith('_'), self._plot_lines_labels)):
                 if self._legend is not None:
                     self._legend.remove()
-                labels = []
-                lines = []
+                labels: List[str] = []
+                lines: List[Line2D] = []
+                lbl: str
                 for i, lbl in enumerate(self._plot_lines_labels):
                     if not lbl.startswith('_'):
                         labels.append(lbl)
@@ -824,15 +851,16 @@ class Plot:
                     self._legend = self._legend_figure.legend(lines, labels, frameon=False,
                                                               loc='center', facecolor='red')
                     self._legend_figure.canvas.draw()
-                    we = self._legend.get_window_extent()
+                    we: Bbox = self._legend.get_window_extent()
                     self._legend_figure.canvas.setMinimumWidth(we.width)
                     self._legend_figure.canvas.setMaximumWidth(we.width)
                     self._legend_figure.canvas.setMinimumHeight(we.height)
                     self._legend_figure.canvas.setMaximumHeight(we.height)
                     self._legend_figure.canvas.draw()
                     # self._legend_figure.canvas.setVisible(True)
+                    _leg_line: Line2D
                     for _leg_line in self._legend.get_lines():
-                        _leg_line.set_pickradius(5)
+                        _leg_line.pickradius = 5
                         _leg_line.set_picker(True)
 
             self._toolbar.clear_action.setEnabled(True)
@@ -852,8 +880,8 @@ class Plot:
                 self.on_data_loaded_callback((self._min_frequency, self._max_frequency,
                                               self._min_voltage, self._max_voltage))
 
-            return self._min_frequency, self._max_frequency, self._min_voltage, self._max_voltage
-        return None
+            return
+        return
 
     @property
     def mode(self):
@@ -876,7 +904,7 @@ class Plot:
         self._toolbar.trace_action.setChecked(False)
         self._toolbar.trace_multiple_action.setChecked(False)
 
-    def plot_mark_action_toggled(self, new_value):
+    def plot_mark_action_toggled(self, new_value: bool):
         if self._toolbar.mode == 'zoom rect':
             self._toolbar.zoom()
         elif self._toolbar.mode == 'pan/zoom':
@@ -885,7 +913,7 @@ class Plot:
             self._toolbar.trace_action.setChecked(False)
             self._toolbar.trace_multiple_action.setChecked(False)
 
-    def plot_trace_action_toggled(self, new_value):
+    def plot_trace_action_toggled(self, new_value: bool):
         if new_value:
             self._toolbar.mark_action.setChecked(False)
             self._toolbar.trace_multiple_action.setChecked(False)
@@ -899,7 +927,7 @@ class Plot:
         self.plot_trace_multiple_cursor.enabled = False
         self.plot_trace_multiple_cursor.visible = False
 
-    def plot_trace_multiple_action_toggled(self, new_value):
+    def plot_trace_multiple_action_toggled(self, new_value: bool):
         if new_value:
             self._toolbar.mark_action.setChecked(False)
             self._toolbar.trace_action.setChecked(False)
@@ -914,13 +942,14 @@ class Plot:
         self.plot_trace_multiple_cursor.visible = new_value
 
     def plot_copy_trace_action_triggered(self):
-        sep = '\t'
-        table = ''
-        selections = []
+        sep: str = '\t'
+        table: str = ''
+        selections: List[Selection] = []
         if self.plot_trace_multiple_cursor.enabled:
             selections = self.plot_trace_multiple_cursor.selections
         elif self.plot_trace_cursor.enabled:
             selections = self.plot_trace_cursor.selections
+        sel: Selection
         for sel in selections:
             x, y = sel.target.tolist()
             offset = sel.target.offset
@@ -929,23 +958,23 @@ class Plot:
             QGuiApplication.clipboard().setText(table)
 
     def plot_save_trace_action_triggered(self):
-        selections = []
+        selections: List[Selection] = []
         if self.plot_trace_multiple_cursor.enabled:
             selections = self.plot_trace_multiple_cursor.selections
         elif self.plot_trace_cursor.enabled:
             selections = self.plot_trace_cursor.selections
 
-        labels = []
+        labels: List[str] = []
         for sel in selections:
             label = sel.annotation.original_label
             if label not in labels:
                 labels.append(label)
 
-        data = dict()
+        data: Dict[str, Tuple[List[float], List[float], List[float]]] = dict()
         for label in labels:
-            picked_x = []
-            picked_y = []
-            picked_dy = []
+            picked_x: List[float] = []
+            picked_y: List[float] = []
+            picked_dy: List[float] = []
             for sel in selections:
                 if sel.annotation.original_label != label:
                     continue
@@ -957,9 +986,11 @@ class Plot:
                 continue
             data[label] = (picked_x, picked_y, picked_dy)
 
+        filename: str
+        _filter: str
         filename, _filter = self.save_file_dialog(_filter='CSV (*.csv);;XLSX (*.xlsx)')
         if filename:
-            sep = '\t'
+            sep: str = '\t'
             self.save_arbitrary_data(data, filename, _filter,
                                      csv_header=(sep.join(('frequency', 'voltage', 'voltage_to_mean')) + os.linesep
                                                  + sep.join(('MHz', 'mV', 'mV'))),
@@ -969,27 +1000,27 @@ class Plot:
     def plot_clear_trace_action_triggered(self):
         self.clear_selections()
 
-    def save_data(self, filename, _filter):
+    def save_data(self, filename: str, _filter: str):
         if self._plot_voltages[-1].size == 0 or not filename:
             return
-        filename_parts = os.path.splitext(filename)
+        filename_parts: Tuple[str, str] = os.path.splitext(filename)
         if 'CSV' in _filter:
             if filename_parts[1] != '.csv':
                 filename += '.csv'
-            x = self._plot_frequencies[-1]
-            y = self._plot_voltages[-1]
+            x: np.ndarray = self._plot_frequencies[-1]
+            y: np.ndarray = self._plot_voltages[-1]
             if self._max_mark is not None:
-                good = (x <= self._max_mark)
+                good: np.ndarray = (x <= self._max_mark)
                 x = x[good]
                 y = y[good]
                 del good
             if self._min_mark is not None:
-                good = (x >= self._min_mark)
+                good: np.ndarray = (x >= self._min_mark)
                 x = x[good]
                 y = y[good]
                 del good
-            data = np.vstack((x, y)).transpose()
-            sep = '\t'
+            data: np.ndarray = np.vstack((x, y)).transpose()
+            sep: str = '\t'
             # noinspection PyTypeChecker
             np.savetxt(filename, data,
                        delimiter=sep,
@@ -999,34 +1030,40 @@ class Plot:
             if filename_parts[1] != '.xlsx':
                 filename += '.xlsx'
             with pd.ExcelWriter(filename) as writer:
+                x: np.ndarray
+                y: np.ndarray
+                i: int
                 for i, (x, y) in enumerate(zip(self._plot_frequencies, self._plot_voltages)):
                     if self._plot_lines_labels[i].startswith('_*empty*_'):
                         continue
                     if self._max_mark is not None:
-                        good = (x <= self._max_mark)
+                        good: np.ndarray = (x <= self._max_mark)
                         x = x[good]
                         y = y[good]
                         del good
                     if self._min_mark is not None:
-                        good = (x >= self._min_mark)
+                        good: np.ndarray = (x >= self._min_mark)
                         x = x[good]
                         y = y[good]
                         del good
-                    data = np.vstack((x, y)).transpose()
-                    df = pd.DataFrame(data)
+                    data: np.ndarray = np.vstack((x, y)).transpose()
+                    df: pd.DataFrame = pd.DataFrame(data)
                     df.to_excel(writer, index=False, header=['Frequency [MHz]', 'Voltage [mV]'],
                                 sheet_name=self._plot_lines_labels[i])
 
     def save_figure(self):
         # TODO: add legend to the figure to save
-        filetypes = self._canvas.get_supported_filetypes_grouped()
-        sorted_filetypes = sorted(filetypes.items())
+        filetypes: Dict[str, List[str]] = self._canvas.get_supported_filetypes_grouped()
+        # noinspection PyTypeChecker
+        sorted_filetypes: List[Tuple[str, List[str]]] = sorted(filetypes.items())
 
-        filters = ';;'.join([
+        filters: str = ';;'.join([
             f'{name} ({" ".join([("*." + ext) for ext in extensions])})'
             for name, extensions in sorted_filetypes
         ])
 
+        figure_file_name: str
+        _filter: str
         figure_file_name, _filter = self.save_file_dialog(_filter=filters)
         if figure_file_name:
             try:
@@ -1036,19 +1073,19 @@ class Plot:
                                      QMessageBox.Ok, QMessageBox.NoButton)
 
     @staticmethod
-    def save_arbitrary_data(data, filename, _filter, *,
-                            csv_header='', csv_sep='\t',
-                            xlsx_header=None, sheet_name='Markings'):
+    def save_arbitrary_data(data, filename: str, _filter: str, *,
+                            csv_header: str = '', csv_sep: str = '\t',
+                            xlsx_header=None, sheet_name: str = 'Markings'):
         if not filename:
             return
         if xlsx_header is None:
             xlsx_header = True
-        filename_parts = os.path.splitext(filename)
+        filename_parts: Tuple[str, str] = os.path.splitext(filename)
         if 'CSV' in _filter:
             if filename_parts[1].lower() != '.csv':
                 filename += '.csv'
             if isinstance(data, dict):
-                joined_data = None
+                joined_data: Optional[np.ndarray] = None
                 for key, value in data.items():
                     if joined_data is None:
                         joined_data = np.vstack(value).transpose()
@@ -1078,7 +1115,7 @@ class Plot:
                     df.to_excel(writer, index=False, header=xlsx_header,
                                 sheet_name=sheet_name)
 
-    def get_config_value(self, section, key, default, _type):
+    def get_config_value(self, section: str, key: str, default, _type: Type):
         if section not in self.settings.childGroups():
             return default
         self.settings.beginGroup(section)
@@ -1090,16 +1127,18 @@ class Plot:
         self.settings.endGroup()
         return v
 
-    def set_config_value(self, section, key, value):
+    def set_config_value(self, section: str, key: str, value: Any):
         self.settings.beginGroup(section)
         # print(section, key, value, type(value))
         self.settings.setValue(key, value)
         self.settings.endGroup()
 
-    def open_file_dialog(self, _filter=''):
-        directory = self.get_config_value('open', 'location', '', str)
+    def open_file_dialog(self, _filter: str = '') -> Tuple[str, str]:
+        directory: str = self.get_config_value('open', 'location', '', str)
         # native dialog misbehaves when running inside snap but Qt dialog is tortoise-like in NT
-        options = QFileDialog.DontUseNativeDialog if os.name != 'nt' else QFileDialog.DontUseSheet
+        options: QFileDialog.Option = QFileDialog.DontUseNativeDialog if os.name != 'nt' else QFileDialog.DontUseSheet
+        filename: str
+        _filter: str
         filename, _filter = QFileDialog.getOpenFileName(filter=_filter,
                                                         directory=directory,
                                                         options=options)
@@ -1107,11 +1146,13 @@ class Plot:
             self.set_config_value('open', 'location', os.path.split(filename)[0])
         return filename, _filter
 
-    def save_file_dialog(self, _filter=''):
-        directory = self.get_config_value('save', 'location', '', str)
-        initial_filter = self.get_config_value('save', 'filter', '', str)
+    def save_file_dialog(self, _filter: str = '') -> Tuple[str, str]:
+        directory: str = self.get_config_value('save', 'location', '', str)
+        initial_filter: str = self.get_config_value('save', 'filter', '', str)
         # native dialog misbehaves when running inside snap but Qt dialog is tortoise-like in NT
-        options = QFileDialog.DontUseNativeDialog if os.name != 'nt' else QFileDialog.DontUseSheet
+        options: QFileDialog.Option = QFileDialog.DontUseNativeDialog if os.name != 'nt' else QFileDialog.DontUseSheet
+        filename: str
+        _filter: str
         filename, _filter = QFileDialog.getSaveFileName(filter=_filter,
                                                         directory=directory,
                                                         initialFilter=initial_filter,
